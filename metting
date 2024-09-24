@@ -15,5 +15,12 @@ https://www.lgdealernetplus.com/DealerNetPlus/LoginForm
 Login ID : IN021520001H
 Password  : LGINDIA#12
 
+API :https://www.lgdealernetplus.com/DealerNetPlus/login
+
+loginId: IN021520001H
+ePassword: LGINDIA#12
+radio: dealerNet
+errorMessage: 
+
 ----------------------------------------------
 
