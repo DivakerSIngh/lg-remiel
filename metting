@@ -24,3 +24,51 @@ errorMessage:
 
 ----------------------------------------------
 
+
+----------------------***********************************************----------------------------------------
+
+{
+  "Logging": {
+    "LogLevel": {
+      "Default": "Information",
+      "Microsoft.AspNetCore": "Warning"
+    }
+  },
+  "AllowedHosts": "*",
+  "ConnectionStrings": {
+    "DefaultConnection": "Data Source=(DESCRIPTION = (ADDRESS = (PROTOCOL = TCP)(HOST = 192.168.20.208)(PORT = 1529)) (CONNECT_DATA = (SERVER = DEDICATED) (SERVICE_NAME = LGVLD))); User Id=LGCSR; Password=LGCSR2024;"
+  },
+  "AppSettings": {
+    "Secret": "CSRDbContextSecretkey",
+    "IssuetrackerConnection": "User Id=system; Password=admin;Data Source=localhost:1521/xe.system"
+  },
+  "dependentAssembly": {
+    "assemblyIdentity": {
+      "name": "System.Data.SqlClient",
+      "publicKeyToken": "kfddsnfsjnfs",
+      "culture": "neutral"
+    },
+    "bindingRedirect": {
+      "oldVersion ": "4.4.0.0",
+      "newVersion": "4.5.1"
+    }
+  },
+  "Jwt": {
+    "Key": "sdfsdfsjdbf78sdyfssdfsdfbuidfs98gdfsdbf",
+    "Issuer": "LGCSRAuthenticationServer",
+    "Audience": "LGCSRServicePostmanClient",
+    "Subject": "LGCSRServiceAccessToken"
+  },
+  "MailSettings": {
+    "FromMail": "lgeilhrms@lge.com",
+    "DisplayName": "LG CSR",
+    "UserName": "",
+    "Password": "",
+    "Host": "10.101.3.229",
+    "Port": 25
+  },
+  "uploadBaseURL": "E:\\Document"
+}
+
+
+
