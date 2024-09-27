@@ -7,49 +7,2071 @@ Meeting ID: 861 6399 8859
 Passcode: dFMDr7
 
 ----------------------***********************************************----------------------------------------
+import { DatePipe } from '@angular/common';
+import {
+  Component,
+  ElementRef,
+  OnInit,
+  ViewChild,
+  ViewEncapsulation,
+} from '@angular/core';
+import {
+  FormArray,
+  FormBuilder,
+  FormGroup,
+  Validators,
+  FormControl,
+} from '@angular/forms';
+import { MatDatepicker } from '@angular/material/datepicker';
+import * as moment from 'moment';
+import { Moment } from 'moment';
+import { RequestServiceService } from 'src/app/services/request-service.service';
+import { MatSnackBar } from '@angular/material/snack-bar';
+import { ActivatedRoute, Router } from '@angular/router';
+import {
+  animate,
+  group,
+  style,
+  transition,
+  trigger,
+} from '@angular/animations';
+import { SessionService } from 'src/app/services/session.service';
+import { DateformatPipe } from 'src/app/Pipes/dateformat.pipe';
+import { HttpClient } from '@angular/common/http';
+import { environment } from 'src/environments/environment';
 
-{
-  "Logging": {
-    "LogLevel": {
-      "Default": "Information",
-      "Microsoft.AspNetCore": "Warning"
-    }
-  },
-  "AllowedHosts": "*",
-  "ConnectionStrings": {
-    "DefaultConnection": "Data Source=(DESCRIPTION = (ADDRESS = (PROTOCOL = TCP)(HOST = 192.168.20.208)(PORT = 1529)) (CONNECT_DATA = (SERVER = DEDICATED) (SERVICE_NAME = LGVLD))); User Id=LGCSR; Password=LGCSR2024;"
-  },
-  "AppSettings": {
-    "Secret": "CSRDbContextSecretkey",
-    "IssuetrackerConnection": "User Id=system; Password=admin;Data Source=localhost:1521/xe.system"
-  },
-  "dependentAssembly": {
-    "assemblyIdentity": {
-      "name": "System.Data.SqlClient",
-      "publicKeyToken": "kfddsnfsjnfs",
-      "culture": "neutral"
+const enterTransition = transition(':enter', [
+  style({
+    opacity: 0,
+  }),
+  animate(
+    '0.5s ease-in',
+    style({
+      opacity: 1,
+    })
+  ),
+]);
+
+const leaveTrans = transition(':leave', [
+  style({
+    opacity: 1,
+  }),
+  animate(
+    '0s ease-out',
+    style({
+      opacity: 0,
+    })
+  ),
+]);
+const fadeIn = trigger('fadeIn', [enterTransition]);
+
+const fadeOut = trigger('fadeOut', [leaveTrans]);
+
+@Component({
+  selector: 'app-request-form',
+  templateUrl: './request-form.component.html',
+  styleUrls: ['./request-form.component.scss', '../../../../stylesCF.scss'],
+  encapsulation: ViewEncapsulation.None,
+  animations: [fadeIn, fadeOut],
+})
+export class RequestFormComponent implements OnInit {
+  item: string[] = [];
+  newItem: any = [];
+  value = '';
+  isControlInvalid: any;
+  isControlValid: any;
+  date = new FormControl(moment());
+  public tradePartnerDetails!: FormGroup;
+  public firmDetails!: FormGroup;
+  public registerAddressDetails!: FormGroup;
+  public businessDetails!: FormGroup;
+  public marketOsDetails!: FormGroup;
+  public businessWithLgDetails!: FormGroup;
+  public documentUpload!: FormGroup;
+  public tradePartner_step = false;
+  public firm_step = false;
+  public registerAddress_step = false;
+  public business_step = false;
+  public marketOs_step = false;
+  public mandateDocsList: any;
+  public Loading = false;
+  public BAMComments = '';
+  public BMComments = '';
+  public businessWithLg_step = false;
+  public documentUpload_step = false;
+  public userType = this.http.getUserType();
+  @ViewChild('file') public DOM: ElementRef;
+  public step = 1;
+  public env = environment.ASSETS_URL;
+  public filesUploaded: any = {
+    ComfortLetterDocList: null,
+    BAMOtherDocList: null,
+    TPOtherDocList: null,
+    BankersCertificateDocList: null,
+    GSTDocList: null,
+    PANNumberDocList: null,
+    CFFormatDocList: null,
+    CFLattersDocList: null,
+  };
+  public statusList = this.session.statusList;
+  public dropdowns: any = {};
+  public statesList = [{ State: 'Select' }];
+  public districtList = [{ District: 'Select' }];
+  public citiesList = [{ City: 'Select' }];
+  public userId = this.http.getUserId();
+  public today = new Date().toISOString().substring(0, 10);
+  public CRF_REC_ID = this.http.getEditRequestId();
+  public documentsList = [];
+  public AllDocumentsList = {
+    CFLattersDocList: [],
+    CFFormatDocList: [],
+    PANNumberDocList: [],
+    GSTDocList: [],
+    BankersCertiDocList: [],
+    TPOtherDocList: [],
+    BAMOtherDocList: [],
+    ComfortLetterDocList: [],
+  };
+  public firmAddresses = [
+    {
+      PROP_NAME: '',
+      OFFC_EMAIL: '',
+      OFFC_MOB_NO: '',
     },
-    "bindingRedirect": {
-      "oldVersion ": "4.4.0.0",
-      "newVersion": "4.5.1"
+  ];
+  public toBankEmails: any = [];
+  public ccBankEmails: any = [];
+  public currentlyStockDetail: any = [];
+  public marketMOS: any = [];
+  public now = new Date();
+  public currentMonthIndex = this.now.getMonth();
+  public currentYear = this.now.getFullYear();
+  public monthNames = [
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
+  ];
+  public businessProjecttion: any = Array.from({ length: 12 }, (_, index) => {
+    const monthIndex = (this.currentMonthIndex + index) % 12;
+    const year =
+      this.currentYear + Math.floor((this.currentMonthIndex + index) / 12);
+    const monthName = this.monthNames[monthIndex];
+    return { 'Month Year': `${monthName}, ${year}` };
+  });
+
+  chosenYearDate!: Date;
+  actionType = 'New';
+
+  constructor(
+    private formBuilder: FormBuilder,
+    private http: RequestServiceService,
+    private snack: MatSnackBar,
+    private router: Router,
+    private activeTab: ActivatedRoute,
+    private dateFormat: DateformatPipe,
+    private session: SessionService
+  ) {
+    this.activeTab.params.subscribe((res) => {
+      this.actionType = res['type'];
+    });
+  }
+
+  keyPress(event: any) {
+    const pattern = /[0-9\+\-\ ]/;
+    let inputChar = String.fromCharCode(event.charCode);
+    if (event.keyCode != 8 && !pattern.test(inputChar)) {
+      event.preventDefault();
     }
-  },
-  "Jwt": {
-    "Key": "sdfsdfsjdbf78sdyfssdfsdfbuidfs98gdfsdbf",
-    "Issuer": "LGCSRAuthenticationServer",
-    "Audience": "LGCSRServicePostmanClient",
-    "Subject": "LGCSRServiceAccessToken"
-  },
-  "MailSettings": {
-    "FromMail": "lgeilhrms@lge.com",
-    "DisplayName": "LG CSR",
-    "UserName": "",
-    "Password": "",
-    "Host": "10.101.3.229",
-    "Port": 25
-  },
-  "uploadBaseURL": "E:\\Document"
+  }
+
+  addItem(item: string) {
+    this.item.push(item);
+    console.log(this.newItem + 'hello');
+  }
+
+  draft() {}
+
+  addAdress(val: any, i: number) {
+    if (
+      this.firmAddresses[this.firmAddresses.length == 1 ? 0 : i].PROP_NAME ==
+        '' ||
+      this.firmAddresses[this.firmAddresses.length == 1 ? 0 : i].PROP_NAME ==
+        undefined
+    ) {
+      this.snack.open('Invalid Prop/Partner/Director Name', 'OK');
+      return;
+    }
+    if (
+      !/[a-zA-Z0-9.-_]{1,}@[a-zA-Z.-]{2,}[.]{1}[a-zA-Z]{2,}/.test(
+        this.firmAddresses[this.firmAddresses.length == 1 ? 0 : i].OFFC_EMAIL
+      )
+    ) {
+      this.snack.open('Invalid Email', 'OK');
+      return;
+    }
+    if (
+      this.firmAddresses[this.firmAddresses.length == 1 ? 0 : i].OFFC_MOB_NO
+        .length != 10
+    ) {
+      this.snack.open('Invalid Mobile Number', 'OK');
+      return;
+    }
+    this.firmAddresses.push(val);
+  }
+  removeAdress() {
+    this.firmAddresses.pop();
+  }
+  addCurrentlyStockDetails(val: any, i: number) {
+    let obj: any = { PROD_TYPE: 'BD' };
+    this.dropdowns.BDarr.forEach((ele: any) => (obj[ele.DDL_VALUE] = ''));
+    this.currentlyStockDetail.push(obj);
+  }
+  removeCurrentlyStockDetails() {
+    this.currentlyStockDetail.pop();
+  }
+  addMarketOS(val: any, i: number) {
+    let obj: any = { PROD_TYPE: 'MOS' };
+    this.dropdowns.MOSarr.forEach((ele: any) => (obj[ele.DDL_VALUE] = ''));
+    this.marketMOS.push(obj);
+  }
+  removeMarketOS() {
+    this.marketMOS.pop();
+  }
+
+  ngOnInit(): void {
+    // Forms Initialization
+    this.tradePartnerDetails = this.formBuilder.group({
+      firmName: ['', Validators.required],
+      header: ['', Validators.required],
+      branch: ['', Validators.required],
+      salesChannel: ['', Validators.required],
+      numOfStores: ['', Validators.required],
+      panNumber: ['', Validators.required],
+      GSTNumber: ['', Validators.required],
+    });
+
+    this.firmDetails = this.formBuilder.group({
+      typeOfFirm: ['', Validators.required],
+      yearOfCom: ['', Validators.required],
+      associateLG: ['', Validators.required],
+      partnerName: ['', Validators.required],
+      email: ['', Validators.required],
+      mobile: ['', [Validators.required, Validators.maxLength(10)]],
+    });
+
+    this.registerAddressDetails = this.formBuilder.group({
+      add1: ['', [Validators.required]],
+      add2: ['', [Validators.required]],
+      add3: [''],
+      add4: [''],
+      state: [''],
+      district: [''],
+      city: [''],
+      pinCode: ['', [Validators.minLength(6), Validators.maxLength(6)]],
+    });
+
+    this.businessDetails = this.formBuilder.group({
+      consumerEleBusiness: ['', Validators.required],
+      consumerEleBusinessDetails: [''],
+      anyOtherBusiness: ['', Validators.required],
+      anyOtherBusinessDetails: [''],
+    });
+
+    this.marketOsDetails = this.formBuilder.group({
+      he: [''],
+      ha: [''],
+      rac: [''],
+      other: [''],
+      total: [''],
+    });
+
+    this.businessWithLgDetails = this.formBuilder.group({
+      he: [''],
+      ha: [''],
+      rac: [''],
+      other: [''],
+      total: [''],
+      lastSellInYear: [new Date().getFullYear() - 1 + ''],
+      lastYearSellinValue: [
+        1,
+        this.userType == 'TP' ? null : Validators.required,
+      ],
+    });
+
+    this.documentUpload = this.formBuilder.group({
+      cfBank: ['', Validators.required],
+      BMLimit: [0],
+      cfLimit: ['', Validators.required],
+      reqLetter: [''],
+      cfFormat: [''],
+      panNum: [''],
+      gst: [''],
+      certificate: [''],
+      otherDoc: [''],
+      agree: [''],
+      BAMLimit: [0, this.userType == 'TP' ? null : Validators.required],
+      stock: [''],
+      marketOutstanding: [''],
+      totalInvestment: [''],
+      ARDate: ['', this.userType == 'TP' ? null : Validators.required],
+      otherBankLoan: ['', this.userType == 'TP' ? null : Validators.required],
+      totalLiability: [''],
+      netInvestmentPartner: [''],
+      netInvestmentMonthly: [''],
+      Comments: ['', this.userType == 'TP' ? null : Validators.required],
+      toEmail: ['', this.userType == 'HO' ? Validators.required : null],
+      cCEmail: [''],
+      subject: ['', this.userType == 'HO' ? Validators.required : null],
+      emailCurrentOs: ['', this.userType == 'HO' ? Validators.required : null],
+      cfAccountNo: ['', this.userType == 'HO' ? Validators.required : null],
+      emailRemarks: ['', this.userType == 'HO' ? Validators.required : null],
+    });
+
+    // Forms Initialization End
+
+    this.getState();
+    this.getLookupTypes();
+    this.getCcBankEmails();
+    this.getToBankEmails();
+    switch (this.userType) {
+      case 'TP':
+        if (this.actionType === 'New') {
+          // if New request clicked
+          this.CRF_REC_ID = '0';
+          this.tradePartnerDetails.controls['header'].patchValue(
+            this.userId?.substring(0,8)
+          );
+          this.getAllDropdownLists();
+        } else {
+          if (this.actionType === 'Enhancement') {
+            // if Enhancement request clicked
+            this.getEditRequestData();
+            this.getAllDropdownLists();
+          } else {
+            // if Edit request clicked
+            this.getEditRequestData();
+            this.getAllDropdownLists();
+          }
+        }
+        break;
+      case 'HO':
+        this.getAllDropdownLists();
+        this.getEditRequestData();
+        break;
+      case 'BM':
+        this.getAllDropdownLists();
+        this.getEditRequestData();
+        this.registerAddressDetails.controls['city'].disable();
+        this.registerAddressDetails.controls['district'].disable();
+        this.registerAddressDetails.controls['state'].disable();
+        this.tradePartnerDetails.disable();
+        this.firmDetails.disable();
+        this.registerAddressDetails.disable();
+        this.businessDetails.disable();
+        this.businessWithLgDetails.disable();
+        this.documentUpload.disable();
+        this.documentUpload.controls['Comments'].enable();
+        this.documentUpload.controls['BMLimit'].enable();
+        this.documentUpload.controls['cfLimit'].disable();
+        break;
+
+      default:
+        this.getAllDropdownLists();
+        this.getEditRequestData();
+        this.tradePartnerDetails.disable();
+        this.registerAddressDetails.controls['city'].disable();
+        this.registerAddressDetails.controls['district'].disable();
+        this.registerAddressDetails.controls['state'].disable();
+        this.firmDetails.disable();
+        this.registerAddressDetails.disable();
+        this.businessDetails.disable();
+        // this.documentUpload.controls['cfBank'].disable();
+        this.documentUpload.controls['cfLimit'].disable();
+        break;
+    }
+  }
+
+  numberValueformat(val: Number) {
+    debugger;
+    return val?.toLocaleString() + '';
+  }
+
+  getCcBankEmails() {
+    let obj = {
+      userId: this.userId,
+    };
+    this.http.getCcBankEmails(obj).subscribe((res) => {
+      if (res.success) {
+        this.ccBankEmails = res.data;
+      }
+    });
+  }
+  getToBankEmails() {
+    let obj = {
+      userId: this.userId,
+    };
+    this.http.getToBankEmails(obj).subscribe((res) => {
+      if (res.success) {
+        this.toBankEmails = res.data?.filter(
+          (x: any) =>
+            x.LOOKUP_DESCRIPTION == this.documentUpload.controls['cfBank'].value
+        );
+      }
+    });
+  }
+
+  onSelectFile(event: any, type: string) {
+    debugger;
+    let IsCheckSize = event.target.files[0].size;
+    if (IsCheckSize > 10097152) {
+      event.target.value = '';
+      this.snack.open('Please select a file less than 10Mb', 'OK');
+      return;
+    }
+    // else {
+    //   if (event.files && event.files[0]) {
+    //     let file = event.files[0];
+    //     console.log(event.files[0]);
+    //     this.filesUploaded[type] = file;
+    // var reader = new FileReader();
+    // reader.readAsDataURL(event.target.files[0]);
+    // reader.onload = (event) => {
+    //  let base:any = event.currentTarget;
+    //  this.filesUploaded[type]= base.result;
+    // };
+    //   // }
+    // };
+    this.filesUploaded[type] = event.target.files[0];
+  }
+
+  UploadDocument(type: string, form?: any) {
+    let file = this.filesUploaded[type];
+    var formData = new FormData();
+    formData.append('USER', this.userId + '');
+    formData.append('ROLE', this.userType + '');
+    formData.append('file', file);
+    formData.append('CFR_RECID', this.CRF_REC_ID + '');
+    formData.append('DETAILS_TYPE', type);
+    this.Loading = true;
+    this.http.saveDocument(formData).subscribe({
+      next: (res) => {
+        if (res.success) {
+          this.Loading = false;
+          this.snack.open('Document Uploaded Successfully!', 'OK');
+          this.filesUploaded[type] = null;
+          form.reset();
+        }
+      },
+      error: (err) => {
+        this.Loading = false;
+        console.log(err);
+      },
+    });
+  }
+
+  DeleteDocument(id: any, type: string) {
+    let obj = {
+      FD_RECID: id,
+      USER: this.userId,
+    };
+    if (window.confirm('Are You Sure, You Want To Delete This Document?')) {
+      this.http.saveDelete(obj).subscribe((res) => {
+        if (res.success) {
+          this.snack.open('Document Deleted Successfully!', 'OK');
+          this.getDocumentsByType(type);
+        }
+      });
+    } else {
+    }
+  }
+
+  getEditRequestData() {
+    let obj = {
+      CFR_RECID: this.CRF_REC_ID,
+      ROLE: this.userType,
+      USER_ID: this.userId,
+    };
+    this.Loading = true;
+    this.http.getEditRequestDetails(obj).subscribe({
+      next: (res) => {
+        this.bindEditabledata(res.data);
+        this.Loading = false;
+      },
+      error: (error) => {
+        console.log(error);
+        this.userType == 'TP'
+          ? this.router.navigate(['/channelFinance/home'])
+          : null;
+      },
+    });
+  }
+
+  getDocumentsByType(type: string) {
+    let obj = {
+      userId: '',
+      cfrecId: this.CRF_REC_ID,
+      type: type,
+    };
+    this.documentsList = [];
+    this.Loading = true;
+    this.http.getDocumentsByTypes(obj).subscribe((res) => {
+      if (res.success) {
+        this.Loading = false;
+        this.documentsList = res.data;
+      } else {
+        this.snack.open('No Record(s) found!', 'OK');
+        this.Loading = false;
+        this.documentsList = [];
+      }
+    });
+  }
+
+  getAllDocuments() {
+    let obj = {
+      userId: '',
+      cfrecId: this.CRF_REC_ID,
+    };
+    this.http.getAllDocuments(obj).subscribe((res) => {
+      if (res.success) {
+        this.AllDocumentsList.CFLattersDocList = res.data.filter(
+          (x: any) => x.DETAILS_TYPE == 'CFLattersDocList'
+        );
+        this.AllDocumentsList.CFFormatDocList = res.data.filter(
+          (x: any) => x.DETAILS_TYPE == 'CFFormatDocList'
+        );
+        this.AllDocumentsList.PANNumberDocList = res.data.filter(
+          (x: any) => x.DETAILS_TYPE == 'PANNumberDocList'
+        );
+        this.AllDocumentsList.GSTDocList = res.data.filter(
+          (x: any) => x.DETAILS_TYPE == 'GSTDocList'
+        );
+        this.AllDocumentsList.BankersCertiDocList = res.data.filter(
+          (x: any) => x.DETAILS_TYPE == 'BankersCertiDocList'
+        );
+        this.AllDocumentsList.TPOtherDocList = res.data.filter(
+          (x: any) => x.DETAILS_TYPE == 'TPOtherDocList'
+        );
+        this.AllDocumentsList.BAMOtherDocList = res.data.filter(
+          (x: any) => x.DETAILS_TYPE == 'BAMOtherDocList'
+        );
+        this.AllDocumentsList.ComfortLetterDocList = res.data.filter(
+          (x: any) => x.DETAILS_TYPE == 'ComfortLetterDocList'
+        );
+      } else {
+        this.snack.open('No Record(s) found!', 'OK');
+        this.AllDocumentsList = {
+          CFLattersDocList: [],
+          CFFormatDocList: [],
+          PANNumberDocList: [],
+          GSTDocList: [],
+          BankersCertiDocList: [],
+          TPOtherDocList: [],
+          BAMOtherDocList: [],
+          ComfortLetterDocList: [],
+        };
+      }
+    });
+  }
+
+  getAllDropdownLists() {
+    let obj = {
+      userId: this.userId,
+      userType: this.userType,
+    };
+    this.http.getAllDropdownLists(obj).subscribe((res) => {
+      debugger;
+      if (res.success) {
+        if(this.actionType!="New"){
+          this.getEditRequestData();
+        }
+        this.dropdowns = res.data;
+        this.dropdowns.ProductType = res.data.ProductType.sort(
+          (a: any, b: any) => parseInt(a.ORDER_NO) - parseInt(b.ORDER_NO)
+        );
+        if(this.userType === 'TP'){
+          let BDobj: any = { PROD_TYPE: 'BD' };
+          this.dropdowns.ProductType.forEach(
+            (ele: any) => (BDobj[ele.DDL_VALUE] = '')
+          );
+          this.currentlyStockDetail = [BDobj];
+  
+          let MOSobj: any = { PROD_TYPE: 'MOS' };
+          this.dropdowns.ProductType.forEach(
+            (ele: any) => (MOSobj[ele.DDL_VALUE] = '')
+          );
+          this.marketMOS = [MOSobj];
+        }
+      } else {
+        this.dropdowns = {};
+      }
+    });
+  }
+
+  getFileType(item: any) {
+    let path = item?.FILE_PATH;
+    if (
+      path?.substring(path?.length, path?.length - 3) == 'png' ||
+      path?.substring(path?.length, path?.length - 3) == 'peg' ||
+      path?.substring(path?.length, path?.length - 3) == 'jpg'
+    ) {
+      return 'IMG';
+    }
+    if (path?.substring(path?.length, path?.length - 3) == 'pdf') {
+      return 'PDF';
+    }
+    if (
+      path?.substring(path?.length, path?.length - 3) == 'lsx' ||
+      path?.substring(path?.length, path?.length - 3) == 'xls'
+    ) {
+      return 'XLS';
+    }
+    return 'NA';
+  }
+
+  getTableHeaders() {
+    let obj = {
+      userId: this.userId,
+      userType: this.userType,
+    };
+    this.http.getAllDropdownLists(obj).subscribe({
+      next: (res) => {
+        this.dropdowns = res.data;
+        this.dropdowns.ProductType = res.data.ProductType.sort(
+          (a: any, b: any) => parseInt(a.ORDER_NO) - parseInt(b.ORDER_NO)
+        );
+      },
+      error: (error) => {
+        console.warn(error);
+      },
+    });
+  }
+
+  bindEditabledata(data: any) {
+    debugger;
+    // Binding Step 1------------------------------------------------------------------------
+    this.tradePartnerDetails.controls['firmName'].patchValue(
+      data?.CRF_MASTER?.FIRM_NAME
+    );
+    this.tradePartnerDetails.controls['header'].patchValue(
+      data?.CRF_MASTER?.HEADER
+    );
+    this.tradePartnerDetails.controls['branch'].patchValue(
+      data?.CRF_MASTER?.BRANCH
+    );
+    this.tradePartnerDetails.controls['salesChannel'].patchValue(
+      data?.CRF_MASTER?.SALES_CHANNEL?.split(',')
+    );
+    this.tradePartnerDetails.controls['numOfStores'].patchValue(
+      data?.CRF_MASTER?.STORE_NOS
+    );
+    this.tradePartnerDetails.controls['panNumber'].patchValue(
+      data?.CRF_MASTER?.PAN_NO
+    );
+    this.tradePartnerDetails.controls['GSTNumber'].patchValue(
+      data?.CRF_MASTER?.GST_NO
+    );
+
+    // Binding Step 2------------------------------------------------------------------------
+    this.firmDetails.controls['typeOfFirm'].patchValue(
+      data?.CRF_MASTER?.FIRMS_TYPE
+    );
+    this.firmDetails.controls['yearOfCom'].patchValue(
+      data?.CRF_MASTER?.COMM_YEAR
+    );
+    this.firmDetails.controls['associateLG'].patchValue(
+      data?.CRF_MASTER?.ASSOC_LG_YEAR
+    );
+    this.firmAddresses =
+      data.PARTNER_DETAILS?.length == 0
+        ? [
+            {
+              PROP_NAME: '',
+              OFFC_EMAIL: '',
+              OFFC_MOB_NO: '',
+            },
+          ]
+        : data.PARTNER_DETAILS;
+
+    // Binding Step 3------------------------------------------------------------------------
+    this.registerAddressDetails.controls['add1'].patchValue(
+      data?.CFR_ADDRESS[0]?.ADDRESS1
+    );
+    this.registerAddressDetails.controls['add2'].patchValue(
+      data?.CFR_ADDRESS[0]?.ADDRESS2
+    );
+    this.registerAddressDetails.controls['add3'].patchValue(
+      data?.CFR_ADDRESS[0]?.ADDRESS3
+    );
+    this.registerAddressDetails.controls['add4'].patchValue(
+      data?.CFR_ADDRESS[0]?.ADDRESS4
+    );
+    this.registerAddressDetails.controls['pinCode'].patchValue(
+      data?.CFR_ADDRESS[0]?.PINCODE
+    );
+    this.registerAddressDetails.controls['state'].patchValue(
+      data?.CFR_ADDRESS[0]?.STATE
+    );
+    this.getDistricts(data?.CFR_ADDRESS[0]?.STATE);
+    this.registerAddressDetails.controls['district'].patchValue(
+      data?.CFR_ADDRESS[0]?.DISTRICT
+    );
+    this.getCities(data?.CFR_ADDRESS[0]?.DISTRICT);
+    this.registerAddressDetails.controls['city'].patchValue(
+      data?.CFR_ADDRESS[0]?.CITY
+    );
+
+    // Binding Step 4------------------------------------------------------------------------
+    this.businessDetails.controls['consumerEleBusiness'].patchValue(
+      data?.CRF_MASTER?.OTHER_BRAND_YN
+    );
+    this.businessDetails.controls['consumerEleBusinessDetails'].patchValue(
+      data?.CRF_MASTER?.OTHER_BRAND_DETAILS
+    );
+    this.businessDetails.controls['anyOtherBusiness'].patchValue(
+      data?.CRF_MASTER?.OTHER_BUSS_YN
+    );
+    this.businessDetails.controls['anyOtherBusinessDetails'].patchValue(
+      data?.CRF_MASTER?.OTHER_BUSS_DETAILS
+    );
+    this.currentlyStockDetail =
+      data.PROD_VALUE.length == 0
+        ? this.currentlyStockDetail
+        : [data.PROD_VALUE?.filter((x: any) => x.PROD_TYPE == 'BD')[0]];
+
+    // Binding Step 5------------------------------------------------------------------------
+    this.marketMOS =
+      data.PROD_VALUE.length == 0
+        ? this.marketMOS
+        : [data.PROD_VALUE?.filter((x: any) => x.PROD_TYPE == 'MOS')[0]];
+
+    // Binding Step 6------------------------------------------------------------------------
+    this.businessProjecttion =
+      data.ANNUAL_PROP_BUSS.length == 0
+        ? this.businessProjecttion
+        : data.ANNUAL_PROP_BUSS;
+    if (this.userType == 'BM' || this.userType == 'HO') {
+      this.businessWithLgDetails.controls['lastSellInYear'].patchValue(
+        data?.CRF_MASTER?.LAST_SELLING_YEAR
+      );
+    }
+    this.businessWithLgDetails.controls['lastYearSellinValue'].patchValue(
+      data?.CRF_MASTER?.TOTAL_LAST_SALE_AMT
+    );
+
+    // Binding Step 7------------------------------------------------------------------------
+    this.documentUpload.controls['cfBank'].patchValue(
+      data?.CRF_MASTER?.CHN_FIN_BANK
+    );
+    this.documentUpload.controls['cfLimit'].patchValue(
+      data?.CRF_MASTER?.CF_LIMIT_REQ_AMT
+    );
+    this.documentUpload.controls['BAMLimit'].patchValue(
+      data?.CRF_MASTER?.BAM_LIMIT_REQ_AMT
+    );
+    this.documentUpload.controls['BMLimit'].patchValue(
+      data?.CRF_MASTER?.BM_LIMIT_REQ_AMT
+    );
+    this.documentUpload.controls['cCEmail'].patchValue(
+      data?.CRF_MASTER?.CC_MAIL_LG
+    );
+    this.documentUpload.controls['toEmail'].patchValue(
+      data?.CRF_MASTER?.TO_MAIL_BANK
+    );
+    this.documentUpload.controls['netInvestmentMonthly'].patchValue(
+      data?.CRF_MASTER?.NET_INVEST
+    );
+    this.documentUpload.controls['netInvestmentPartner'].patchValue(
+      data?.CRF_MASTER?.NET_INVEST_PERCENT
+    );
+    this.documentUpload.controls['totalLiability'].patchValue(
+      data?.CRF_MASTER?.TOTAL_LIABILITY
+    );
+    this.documentUpload.controls['otherBankLoan'].patchValue(
+      data?.CRF_MASTER?.OTHER_LG_LOAN
+    );
+    this.documentUpload.controls['ARDate'].patchValue(data?.CRF_MASTER?.LG_AR);
+    this.documentUpload.controls['BAMLimit'].patchValue(
+      data?.CRF_MASTER?.BAM_LIMIT_REQ_AMT
+    );
+    this.getToBankEmails();
+
+    if (this.userType == 'HO') {
+      this.documentUpload.controls['Comments'].patchValue(
+        data?.CRF_MASTER?.HO_COMMENT
+      );
+      data?.CRF_MASTER?.HO_STATUS;
+      data?.CRF_MASTER?.HO_STATUS_DATE;
+    }
+    if (this.userType == 'BAM') {
+      this.documentUpload.controls['Comments'].patchValue(
+        data?.CRF_MASTER?.BAM_COMMENT
+      );
+      data?.CRF_MASTER?.BAM_STATUS;
+      data?.CRF_MASTER?.BAM_STATUS_DATE;
+    }
+    if (this.userType == 'BM') {
+      this.documentUpload.controls['Comments'].patchValue(
+        data?.CRF_MASTER?.BM_COMMENT
+      );
+      data?.CRF_MASTER?.BM_STATUS;
+      data?.CRF_MASTER?.BM_STATUS_DATE;
+    }
+    this.BAMComments = data?.CRF_MASTER?.BAM_COMMENT;
+    this.BMComments = data?.CRF_MASTER?.BM_COMMENT;
+
+    this.documentUpload.controls['stock'].patchValue(
+      this.totalStep4and5(this.currentlyStockDetail[0])
+    );
+    this.documentUpload.controls['marketOutstanding'].patchValue(
+      this.totalStep4and5(this.marketMOS[0])
+    );
+    this.documentUpload.controls['totalInvestment'].patchValue(
+      +this.documentUpload.controls['stock'].value +
+        +this.documentUpload.controls['marketOutstanding'].value
+    );
+  }
+
+  totalLiability() {
+    if (
+      this.documentUpload.controls['ARDate']?.value == null ||
+      this.documentUpload.controls['otherBankLoan']?.value == null
+    ) {
+      return 0;
+    } else {
+      return this.documentUpload.controls['totalLiability'].patchValue(
+        +this.documentUpload.controls['ARDate']?.value +
+          +this.documentUpload.controls['otherBankLoan']?.value
+      );
+    }
+  }
+  investmentofPartner() {
+    if (
+      this.documentUpload.controls['totalInvestment']?.value == null ||
+      this.documentUpload.controls['totalLiability']?.value == null
+    ) {
+      return 0;
+    } else {
+      return this.documentUpload.controls['netInvestmentPartner'].patchValue(
+        +this.documentUpload.controls['totalInvestment']?.value +
+          +this.documentUpload.controls['totalLiability']?.value
+      );
+    }
+  }
+  investmentofMonthly() {
+    if (
+      this.documentUpload.controls['netInvestmentPartner'].value == null ||
+      this.businessWithLgDetails.controls['lastYearSellinValue'].value == null
+    ) {
+    } else {
+      return this.documentUpload.controls['netInvestmentMonthly'].patchValue(
+        (
+          (+this.documentUpload.controls['netInvestmentPartner'].value /
+            +this.businessWithLgDetails.controls['lastYearSellinValue'].value) *
+          100
+        ).toFixed(0)
+      );
+    }
+  }
+  onAddPipCode(code: any) {
+    if (code.length < 6) {
+      this.snack.open('Invalid Pin Code!', 'OK');
+      return;
+    }
+    let obj = {
+      text: code,
+      searchBy: 'Pin',
+    };
+    this.http.getPinCodeDetails(obj).subscribe({
+      next: (res: any) => {
+        if (res.success) {
+          this.registerAddressDetails.controls['pinCode'].patchValue(code);
+          this.registerAddressDetails.controls['state'].setValue(
+            res?.data[0]?.State
+          );
+          this.getDistricts(res?.data[0]?.State);
+          this.registerAddressDetails.controls['district'].setValue(
+            res?.data[0]?.District
+          );
+          this.getCities(res?.data[0]?.District);
+          this.registerAddressDetails.controls['city'].setValue(
+            res?.data[0]?.City
+          );
+        } else {
+          this.registerAddressDetails.controls['pinCode'].patchValue(code);
+          this.registerAddressDetails.controls['city'].patchValue('');
+          this.registerAddressDetails.controls['district'].patchValue('');
+          this.registerAddressDetails.controls['state'].patchValue('');
+        }
+      },
+      error: (error: any) => {
+        console.log(error);
+      },
+    });
+  }
+  getState() {
+    let obj = {
+      text: 'India',
+      searchBy: 'Country',
+    };
+    this.http.getStates(obj).subscribe({
+      next: (res: any) => {
+        if (res.success) {
+          this.statesList = res.data;
+        }
+      },
+      error: (error: any) => {
+        console.log(error);
+      },
+    });
+  }
+  getCities(text: any) {
+    let obj = {
+      text: text,
+      searchBy: 'District',
+    };
+    this.http.getCities(obj).subscribe({
+      next: (res: any) => {
+        if (res.success) {
+          this.citiesList = res.data;
+        }
+      },
+      error: (error: any) => {
+        console.log(error);
+      },
+    });
+  }
+  getDistricts(text: any) {
+    let obj = {
+      text: text,
+      searchBy: 'State',
+    };
+    this.http.getDistricts(obj).subscribe({
+      next: (res: any) => {
+        if (res.success) {
+          this.districtList = res.data;
+        }
+      },
+      error: (error: any) => {
+        console.log(error);
+      },
+    });
+  }
+
+  getLookupTypes() {
+    this.Loading = true;
+    let obj = {
+      userId: this.userId,
+      type: 'Y',
+      Id: 'MANDATORY_DOCUMENTS',
+    };
+    this.http.getLookupTypes(obj).subscribe({
+      next: (res: any) => {
+        if (res.success) {
+          this.mandateDocsList = res.data;
+          this.Loading = false;
+        } else {
+          this.snack.open('Something Went Wrong!', 'OK');
+          this.Loading = false;
+        }
+      },
+      error: (error) => {
+        this.Loading = false;
+        this.snack.open('Something Went Wrong!', 'OK');
+        console.error(error);
+      },
+    });
+  }
+
+  validateForm(step: number, data: any) {
+    debugger;
+    switch (step) {
+      case 1:
+        if (data.FIRM_NAME == '') {
+          this.snack.open('Please enter Firm Name', 'OK');
+          return true;
+        }
+        if (data.HEADER == '') {
+          this.snack.open('Please enter Header', 'OK');
+          return true;
+        }
+        if (data.HEADER?.length != 8) {
+          this.snack.open('Please enter Valid Header', 'OK');
+          return true;
+        }
+        if (data.BRANCH == '') {
+          this.snack.open('Please select Branch', 'OK');
+          return true;
+        }
+        if (data.SALES_CHANNEL == '') {
+          this.snack.open('Please select Sales Channel', 'OK');
+          return true;
+        }
+        if (data.STORE_NOS == '') {
+          this.snack.open('Please enter Number Of Stores', 'OK');
+          return true;
+        }
+        if (data.PAN_NO == '') {
+          this.snack.open('Please enter PAN Number', 'OK');
+          return true;
+        }
+        if (data.GST_NO == '') {
+          this.snack.open('Please enter GST Number', 'OK');
+          return true;
+        }
+        return false;
+        break;
+
+      // case 2:
+      //   if(data.GST_NO == ""){
+      //     this.snack.open("Please enter GST Number","OK");
+      //     return true
+      //   }
+      //   return false
+      //   break
+
+      case 7:
+        if (data.CHN_FIN_BANK == '') {
+          this.snack.open('Please select Channel Finance Bank', 'OK');
+          return true;
+        }
+        if (data.CF_LIMIT_REQ_AMT == '') {
+          this.snack.open('Please enter CF Limit Requirement', 'OK');
+          return true;
+        }
+        if (data.TOTAL_LAST_SALE_AMT == '' && this.userType == 'BAM') {
+          this.snack.open('Please enter Total Sellin at step 6', 'OK');
+          return true;
+        }
+        // if(data.MKT_OUTSTANDING == "" && this.userType == "BAM"){
+        //   this.snack.open("Invalid Market Outstanding","OK");
+        //   return true
+        // }
+        if (data.TOTAL_INVESTMENT == '' && this.userType == 'BAM') {
+          this.snack.open('Invalid Total Investment', 'OK');
+          return true;
+        }
+        if (data.LG_AR === '' && this.userType == 'BAM') {
+          this.snack.open('Please enter LG AR as on Date', 'OK');
+          return true;
+        }
+        if (data.OTHER_LG_LOAN === '' && this.userType == 'BAM') {
+          this.snack.open('Please enter Any Other Bank Loan', 'OK');
+          return true;
+        }
+        if (data.TOTAL_LIABILITY === '' && this.userType == 'BAM') {
+          this.snack.open('Please enter Total Liability', 'OK');
+          return true;
+        }
+        if (data.NET_INVEST === '' && this.userType == 'BAM') {
+          this.snack.open(
+            'Please enter Net Investment % of Monthly LG Biz',
+            'OK'
+          );
+          return true;
+        }
+        if (data.NET_INVEST_PERCENT === '' && this.userType == 'BAM') {
+          this.snack.open(
+            'Please enter Net Investment of Partner in LG Biz',
+            'OK'
+          );
+          return true;
+        }
+        if (data.BAM_COMMENT == '' && this.userType == 'BAM') {
+          this.snack.open('Please enter Comments', 'OK');
+          return true;
+        }
+        if (data.BM_COMMENT == '' && this.userType == 'BM') {
+          this.snack.open('Please enter Comments', 'OK');
+          return true;
+        }
+        if (data.HO_COMMENT == '' && this.userType == 'HO') {
+          this.snack.open('Please enter Comments', 'OK');
+          return true;
+        }
+        if (data.TO_MAIL_BANK == '' && this.userType == 'HO') {
+          this.snack.open('Please enter Bank Email', 'OK');
+          return true;
+        }
+        if (data.EMAIL_SUBJECT == '' && this.userType == 'HO') {
+          this.snack.open('Please enter Email Subject', 'OK');
+          return true;
+        }
+        if (
+          (data.BAM_LIMIT_REQ_AMT == 0 || data.BAM_LIMIT_REQ_AMT == '') &&
+          this.userType == 'BAM'
+        ) {
+          this.snack.open('BAM Limit Required greater than zero', 'OK');
+          return true;
+        }
+        if (
+          (data.BM_LIMIT_REQ_AMT == 0 || data.BM_LIMIT_REQ_AMT == '') &&
+          this.userType == 'BM'
+        ) {
+          this.snack.open('BM Limit Required greater than zero', 'OK');
+          return true;
+        }
+        // if(data.OUTSTANDING  == "" && this.userType == "HO"){
+        //   this.snack.open("Please enter Cunnrent O/S for email","OK");
+        //   return true
+        // }
+        if (
+          !/[a-zA-Z0-9.-_]{1,}@[a-zA-Z.-]{2,}[.]{1}[a-zA-Z]{2,}/.test(
+            data.TO_MAIL_BANK
+          ) &&
+          this.userType == 'HO'
+        ) {
+          this.snack.open('Please enter valid email', 'OK');
+          return true;
+        }
+        // if(data.CF_ACCOUNT_NO == "" && this.userType == "HO"){
+        //   this.snack.open("Please enter CF Account NO.","OK");
+        //   return true
+        // }
+        if (data.EMAIL_REMARKS == '' && this.userType == 'HO') {
+          this.snack.open('Please enter Remarks for email', 'OK');
+          return true;
+        }
+        let tpOtherDocs = this.mandateDocsList?.filter(
+          (x: any) => x.LOOKUP_VALUE == 'TP_OTHER_DOC'
+        );
+        let bamOtherDocs = this.mandateDocsList?.filter(
+          (x: any) => x.LOOKUP_VALUE == 'BAM_OTHER_DOC'
+        );
+        let bankerCerti = this.mandateDocsList?.filter(
+          (x: any) => x.LOOKUP_VALUE == 'BANKERS_CERTIFICATE_MAIL'
+        );
+        let cfFormat = this.mandateDocsList?.filter(
+          (x: any) => x.LOOKUP_VALUE == 'CF_FORMAT_YN'
+        );
+        let cfRequest = this.mandateDocsList?.filter(
+          (x: any) => x.LOOKUP_VALUE == 'CF_REQUEST_LATTER_YN'
+        );
+        let comfortLatter = this.mandateDocsList?.filter(
+          (x: any) => x.LOOKUP_VALUE == 'COMFORT_LATTER_DOC'
+        );
+        let gst = this.mandateDocsList?.filter(
+          (x: any) => x.LOOKUP_VALUE == 'GST_NUMBER_YN'
+        );
+        let pan = this.mandateDocsList?.filter(
+          (x: any) => x.LOOKUP_VALUE == 'PAN_NUMBER_YN'
+        );
+        if (tpOtherDocs[0]?.USE_FLAG == 'Y') {
+          if (this.AllDocumentsList.TPOtherDocList.length == 0) {
+            this.snack.open('TP Other Documents Required', 'OK');
+            return true;
+          }
+        }
+        if (bamOtherDocs[0]?.USE_FLAG == 'Y' && this.userType == 'BAM') {
+          if (this.AllDocumentsList.BAMOtherDocList.length == 0) {
+            this.snack.open('BAM Other Documents Required', 'OK');
+            return true;
+          }
+        }
+        if (bankerCerti[0]?.USE_FLAG == 'Y') {
+          if (this.AllDocumentsList.BankersCertiDocList.length == 0) {
+            this.snack.open('Bankers Certificate Documents Required', 'OK');
+            return true;
+          }
+        }
+        if (cfFormat[0]?.USE_FLAG == 'Y') {
+          if (this.AllDocumentsList.CFFormatDocList.length == 0) {
+            this.snack.open('CF Format Latter Required', 'OK');
+            return true;
+          }
+        }
+        if (cfRequest[0]?.USE_FLAG == 'Y') {
+          if (this.AllDocumentsList.CFLattersDocList.length == 0) {
+            this.snack.open('CF Request letter Required', 'OK');
+            return true;
+          }
+        }
+        if (comfortLatter[0]?.USE_FLAG == 'Y' && this.userType == 'HO') {
+          if (this.AllDocumentsList.ComfortLetterDocList.length == 0) {
+            this.snack.open('Comfort Letter Required', 'OK');
+            return true;
+          }
+        }
+        if (
+          comfortLatter[0]?.USE_FLAG == 'N' &&
+          this.userType == 'HO' &&
+          data.CHN_FIN_BANK == 'SBI'
+        ) {
+          if (this.AllDocumentsList.ComfortLetterDocList.length == 0) {
+            this.snack.open('Comfort Letter Required', 'OK');
+            return true;
+          }
+        }
+        if (gst[0]?.USE_FLAG == 'Y') {
+          if (this.AllDocumentsList.GSTDocList.length == 0) {
+            this.snack.open('GST Number Document Required', 'OK');
+            return true;
+          }
+        }
+        if (pan[0]?.USE_FLAG == 'Y') {
+          if (this.AllDocumentsList.PANNumberDocList.length == 0) {
+            this.snack.open('PAN Document Required', 'OK');
+            return true;
+          }
+        }
+        return false;
+        break;
+
+      default:
+        return false;
+        break;
+    }
+  }
+
+  get tradePartner() {
+    return this.tradePartnerDetails.controls;
+  }
+  get firm() {
+    return this.firmDetails.controls;
+  }
+  get registerAddress() {
+    return this.registerAddressDetails.controls;
+  }
+  get business() {
+    return this.businessDetails.controls;
+  }
+  get market() {
+    return this.marketOsDetails.controls;
+  }
+  get businessWithLg() {
+    return this.businessWithLgDetails.controls;
+  }
+  get document() {
+    return this.documentUpload.controls;
+  }
+
+  print(printData: any) {
+    let printContents: any = document.getElementById(printData);
+    let printHtml = window.open('', 'PRINT', 'height=3508,width=2480');
+    printHtml?.document.write(
+      '<html><head><style>' + this.session.CSSForPrint + '</style></head><body>'
+    );
+    printHtml?.document.write(printContents.innerHTML);
+    printHtml?.document.write('</body></html>');
+    printHtml?.document.close();
+    printHtml?.focus();
+    printHtml?.print();
+    printHtml?.close();
+  }
+
+  next() {
+    if (this.userType == 'BM') {
+      // When Login with BM
+      if (this.step == 2) {
+        this.step = 3;
+      }
+      if (this.step == 4) {
+        this.step = 5;
+      }
+    }
+    if (this.step == 1) {
+      // Step 1 Logic
+      let obj = {
+        FIRM_NAME: this.tradePartnerDetails.controls['firmName'].value,
+        HEADER: this.tradePartnerDetails.controls['header'].value,
+        BRANCH: this.tradePartnerDetails.controls['branch'].value,
+        SALES_CHANNEL:
+          this.tradePartnerDetails.controls['salesChannel'].value == ''
+            ? this.tradePartnerDetails.controls['salesChannel'].value
+            : this.tradePartnerDetails.controls['salesChannel'].value?.join(
+                ','
+              ),
+        STORE_NOS: this.tradePartnerDetails.controls['numOfStores'].value,
+        PAN_NO: this.tradePartnerDetails.controls['panNumber'].value,
+        GST_NO: this.tradePartnerDetails.controls['GSTNumber'].value,
+        CFR_RECID: this.actionType === 'Enhancement' ? 0 : this.CRF_REC_ID,
+        PRVS_CFR_RECID: this.actionType === 'Enhancement' ? this.CRF_REC_ID : 0,
+        STEP: 1,
+      };
+      if (this.validateForm(1, obj) == true) {
+        return;
+      }
+      this.tradePartner_step = true;
+      if (
+        this.tradePartnerDetails.controls['firmName'].invalid ||
+        this.tradePartnerDetails.controls['header'].invalid ||
+        this.tradePartnerDetails.controls['branch'].invalid ||
+        this.tradePartnerDetails.controls['salesChannel'].invalid ||
+        this.tradePartnerDetails.controls['numOfStores'].invalid ||
+        this.tradePartnerDetails.controls['panNumber'].invalid ||
+        this.tradePartnerDetails.controls['GSTNumber'].invalid
+      ) {
+        this.snack.open('You left Something! ', 'OK');
+        return;
+      } else {
+        if (this.userType == 'BAM' || this.userType == 'BM') {
+          this.step++;
+          return;
+        } else {
+          this.Loading = true;
+          this.http.saveNewRequestStep0(obj).subscribe({
+            next: (res) => {
+              if (res.success) {
+                this.CRF_REC_ID = res.CFR_RECID;
+                this.Loading = false;
+                this.snack.open('Step 1 Completed', 'OK');
+                this.step++;
+                return;
+              } else {
+                this.Loading = false;
+              }
+            },
+            error: (error) => {
+              console.warn(error);
+              this.Loading = false;
+            },
+          });
+        }
+      }
+    } // Step 1 Logic End
+
+    if (this.step == 2) {
+      // Step 2 Logic
+      let obj = {
+        FIRM_TYPE: [this.firmDetails.controls['typeOfFirm'].value],
+        COMM_YEAR: this.firmDetails.controls['yearOfCom'].value,
+        ASSOC_LG_YEAR: this.firmDetails.controls['associateLG'].value,
+        PARTNERS_DETAILS: this.firmAddresses,
+        CFR_RECID: this.CRF_REC_ID,
+        STEP: 2,
+      };
+      this.firm_step = true;
+      if (
+        this.firmDetails.controls['typeOfFirm'].invalid ||
+        this.firmDetails.controls['yearOfCom'].invalid ||
+        this.firmDetails.controls['associateLG'].invalid ||
+        this.firmAddresses[this.firmAddresses.length - 1].PROP_NAME == '' ||
+        this.firmAddresses[this.firmAddresses.length - 1].OFFC_EMAIL == '' ||
+        this.firmAddresses[this.firmAddresses.length - 1].OFFC_MOB_NO == ''
+      ) {
+        this.snack.open('You left Something! ', 'OK');
+        return;
+      } else {
+        if (
+          !/[a-zA-Z0-9.-_]{1,}@[a-zA-Z.-]{2,}[.]{1}[a-zA-Z]{2,}/.test(
+            this.firmAddresses[this.firmAddresses.length - 1].OFFC_EMAIL
+          )
+        ) {
+          this.snack.open('Invalid Email', 'OK');
+          return;
+        }
+        if (this.userType == 'BAM' || this.userType == 'BM') {
+          this.step++;
+          return;
+        } else {
+          this.Loading = true;
+          this.http.saveNewRequestStep1(obj).subscribe({
+            next: (res) => {
+              if (res.success) {
+                console.log(this.step);
+                this.Loading = false;
+                this.snack.open('Step 2 Completed', 'OK');
+                this.step++;
+                return;
+              } else {
+                this.Loading = false;
+              }
+            },
+            error: (error) => {
+              console.warn(error);
+              this.Loading = false;
+            },
+          });
+        }
+      }
+    } // Step 2 Logic End
+
+    if (this.step == 3) {
+      // Step 3 Logic
+      let obj = {
+        ADDRESS1: this.registerAddressDetails.controls['add1'].value,
+        ADDRESS2: this.registerAddressDetails.controls['add2'].value,
+        ADDRESS3: this.registerAddressDetails.controls['add3'].value,
+        ADDRESS4: this.registerAddressDetails.controls['add4'].value,
+        CITY: this.registerAddressDetails.controls['city'].value,
+        DISTRICT: this.registerAddressDetails.controls['district'].value,
+        STATE: this.registerAddressDetails.controls['state'].value,
+        PINCODE: this.registerAddressDetails.controls['pinCode'].value,
+        CFR_RECID: this.CRF_REC_ID,
+        STEP: 3,
+      };
+      this.registerAddress_step = true;
+      if (this.registerAddressDetails.invalid) {
+        this.snack.open('You left Something! ', 'OK');
+        return;
+      } else {
+        if (this.userType == 'BAM' || this.userType == 'BM') {
+          this.step++;
+          return;
+        } else {
+          this.Loading = true;
+          this.http.saveNewRequestStep2(obj).subscribe({
+            next: (res) => {
+              if (res.success) {
+                console.log(this.step);
+                this.Loading = false;
+                this.snack.open('Step 3 Completed', 'OK');
+                this.step++;
+                return;
+              } else {
+                this.Loading = false;
+              }
+            },
+            error: (error) => {
+              console.warn(error);
+              this.Loading = false;
+            },
+          });
+        }
+      }
+    } // Step 3 Logic End
+
+    if (this.step == 4) {
+      // Step 4 Logic
+      if (
+        (this.businessDetails.controls['consumerEleBusiness']?.value == 'Y' &&
+          this.businessDetails.controls['consumerEleBusinessDetails']?.value ==
+            '') ||
+        (this.businessDetails.controls['anyOtherBusiness']?.value == 'Y' &&
+          this.businessDetails.controls['anyOtherBusinessDetails']?.value == '')
+      ) {
+        this.snack.open('Please Enter Details! ', 'OK');
+        return;
+      }
+      let obj: any = {
+        OTHER_BRAND_YN:
+          this.businessDetails.controls['consumerEleBusiness'].value,
+        OTHER_BRAND_DETAILS:
+          this.businessDetails.controls['consumerEleBusinessDetails'].value,
+        OTHER_BUSS_YN: this.businessDetails.controls['anyOtherBusiness'].value,
+        OTHER_BUSS_DETAILS:
+          this.businessDetails.controls['anyOtherBusinessDetails'].value,
+        CFR_RECID: this.CRF_REC_ID,
+        PROD_VALUE: [],
+        TABLE_KEYS: this.currentlyStockDetail,
+        STEP: 4,
+      };
+      let BDarr = this.dropdowns.ProductType;
+      this.currentlyStockDetail.forEach((item: any) => {
+        BDarr.forEach((element: any) => {
+          obj.PROD_VALUE.push({
+            PV_RECID: '0',
+            MONTH_YEAR: '',
+            PROD_TYPE: 'BD',
+            PROD_PROP: element?.DDL_VALUE,
+            PROD_AMOUNT: item[element?.DDL_VALUE],
+          });
+        });
+      });
+
+      if (this.businessDetails.invalid) {
+        this.snack.open('You left Something! ', 'OK');
+        return;
+      } else {
+        if (this.userType == 'BAM' || this.userType == 'BM') {
+          this.step++;
+          return;
+        } else {
+          this.Loading = true;
+          this.http.saveNewRequestStep3(obj).subscribe({
+            next: (res) => {
+              if (res.success) {
+                this.Loading = false;
+                this.business_step = true;
+                this.snack.open('Step 4 Completed', 'OK');
+                console.log(this.step);
+                this.step++;
+                return;
+              } else {
+                this.Loading = false;
+              }
+            },
+            error: (error) => {
+              console.warn(error);
+              this.Loading = false;
+            },
+          });
+        }
+      }
+    } // Step 4 Logic End
+
+    if (this.step == 5) {
+      // Step 5 Logic
+      let obj: any = {
+        OTHER_BRAND_YN:
+          this.businessDetails.controls['consumerEleBusiness'].value,
+        OTHER_BRAND_DETAILS:
+          this.businessDetails.controls['consumerEleBusinessDetails'].value,
+        OTHER_BUSS_YN: this.businessDetails.controls['anyOtherBusiness'].value,
+        OTHER_BUSS_DETAILS:
+          this.businessDetails.controls['anyOtherBusinessDetails'].value,
+        CFR_RECID: this.CRF_REC_ID,
+        PROD_VALUE: [],
+        TABLE_KEYS: this.marketMOS,
+        STEP: 5,
+      };
+      let MOSarr = this.dropdowns.ProductType;
+      this.marketMOS.forEach((item: any) => {
+        if(item)
+        {
+          MOSarr.forEach((element: any) => {
+            obj.PROD_VALUE.push({
+              PV_RECID: '0',
+              MONTH_YEAR: '',
+              PROD_TYPE: 'MOS',
+              PROD_PROP: element?.DDL_VALUE,
+              PROD_AMOUNT: item[element?.DDL_VALUE],
+            });
+          });
+        }
+        
+      });
+
+      if (
+        this.tradePartnerDetails.controls['salesChannel'].value.includes(
+          'Distributor'
+        )
+      ) {
+        if (this.totalStep4and5(this.marketMOS[0]) == 0) {
+          this.snack.open("Total value can't be zero!", 'OK');
+          return;
+        }
+      }
+      if (this.userType == 'BAM' || this.userType == 'BM') {
+        this.step++;
+        setTimeout(() => {
+        this.getgrandtotal('')
+          
+        }, 1000);
+        setTimeout(() => {
+          this.getgrandtotal('')
+            
+          }, 1000);
+        return;
+      } else {
+        this.Loading = true;
+        this.http.saveNewRequestStep4(obj).subscribe({
+          next: (res) => {
+            if (res.success) {
+              this.Loading = false;
+              this.marketOs_step = true;
+              this.getgrandtotal('')
+              this.snack.open('Step 5 Completed', 'OK');
+              console.log(this.step);
+              this.step++;
+              return;
+            } else {
+              this.Loading = false;
+            }
+          },
+          error: (error) => {
+            console.warn(error);
+            this.Loading = false;
+          },
+        });
+      }
+    } // Step 5 Logic End
+
+    if (this.step == 6) {
+      // Step 6 Logic
+      let obj: any = {
+        CFR_RECID: this.CRF_REC_ID,
+        ANNUAL_PROP_BUSS: [],
+        LAST_SELLING_YEAR:
+          this.businessWithLgDetails.controls['lastSellInYear'].value,
+        TOTAL_LAST_SALE_AMT:
+          this.businessWithLgDetails.controls['lastYearSellinValue'].value,
+        TABLE_KEYS: this.businessProjecttion,
+        STEP: 6,
+      };
+      let BWLGarr = this.dropdowns.ProductType;
+      this.businessProjecttion.forEach((item: any) => {
+        BWLGarr.forEach((element: any) => {
+          if (element.DDL_VALUE) {
+            obj.ANNUAL_PROP_BUSS.push({
+              PV_RECID: '0',
+              MONTH_YEAR: item['Month Year'],
+              PROD_TYPE: 'BELG',
+              PROD_PROP: element.DDL_VALUE,
+              PROD_AMOUNT: item[element.DDL_VALUE],
+            });
+          }
+        });
+      });
+
+      if (
+        this.businessWithLgDetails.controls['lastYearSellinValue'].invalid &&
+        this.userType != 'TP'
+      ) {
+        this.snack.open('You left Something! ', 'OK');
+        return;
+      } else {
+        if (this.userType == 'BM') {
+          this.step++;
+          return;
+        } else {
+          this.Loading = true;
+          this.http.saveNewRequestStep5(obj).subscribe({
+            next: (res) => {
+              if (res.success) {
+                this.businessWithLg_step = true;
+                this.snack.open('Step 6 Completed', 'OK');
+                this.Loading = false;
+                console.log(this.step);
+                this.step++;
+                return;
+              } else {
+                this.Loading = false;
+              }
+            },
+            error: (error) => {
+              console.warn(error);
+              this.Loading = false;
+            },
+          });
+        }
+      }
+    } // Step 6 Logic End
+
+    if (this.step == 7) {
+      // Step 7 Logic
+      let obj = {
+        STEP: '7',
+        CFR_RECID: this.CRF_REC_ID,
+        ROLE: this.userType,
+        USER_TYPE: this.userType,
+        USER: this.userId,
+        CHN_FIN_BANK: this.documentUpload.controls['cfBank'].value,
+        CF_LIMIT_REQ_AMT: this.documentUpload.controls['cfLimit'].value,
+        CF_REQ_DATE: this.dateFormat.transform(this.today),
+        LAST_SELLING_YEAR:
+          this.businessWithLgDetails.controls['lastSellInYear'].value,
+        TOTAL_LAST_SALE_AMT:
+          this.businessWithLgDetails.controls['lastYearSellinValue'].value,
+        STOCK: this.documentUpload.controls['stock'].value,
+        MKT_OUTSTANDING:
+          this.documentUpload.controls['marketOutstanding'].value,
+        TOTAL_INVESTMENT: this.documentUpload.controls['totalInvestment'].value,
+        LG_AR: this.documentUpload.controls['ARDate'].value,
+        OTHER_LG_LOAN: this.documentUpload.controls['otherBankLoan'].value,
+        TOTAL_LIABILITY: this.documentUpload.controls['totalLiability'].value,
+        NET_INVEST: this.documentUpload.controls['netInvestmentPartner'].value,
+        NET_INVEST_PERCENT:
+          this.documentUpload.controls['netInvestmentMonthly'].value,
+        BAM_LIMIT_REQ_AMT: this.documentUpload.controls['BAMLimit'].value,
+        BM_LIMIT_REQ_AMT: this.documentUpload.controls['BMLimit'].value,
+        BAM_STATUS: '',
+        BM_STATUS: '',
+        HO_STATUS: '',
+        TP_STATUS: '',
+        BAM_STATUS_DATE: this.dateFormat.transform(this.today),
+        BM_STATUS_DATE: this.dateFormat.transform(this.today),
+        HO_STATUS_DATE: this.dateFormat.transform(this.today),
+        BAM_COMMENT: this.documentUpload.controls['Comments'].value,
+        BM_COMMENT: this.documentUpload.controls['Comments'].value,
+        HO_COMMENT: this.documentUpload.controls['Comments'].value,
+        TO_MAIL_BANK: this.documentUpload.controls['toEmail'].value,
+        CC_MAIL_LG: this.documentUpload.controls['cCEmail'].value,
+        EMAIL_SUBJECT: this.documentUpload.controls['subject'].value,
+        BANK_STATUS_DATE: this.dateFormat.transform(this.today),
+        OUTSTANDING: this.documentUpload.controls['emailCurrentOs'].value,
+        CF_ACCOUNT_NO: this.documentUpload.controls['cfAccountNo'].value,
+        EMAIL_REMARKS: this.documentUpload.controls['emailRemarks'].value,
+        BANK_APPROVAL_AMT: '0',
+      };
+      if (this.validateForm(7, obj) == true) {
+        return;
+      }
+      this.documentUpload_step = true;
+      switch (this.userType) {
+        case 'TP':
+          if (
+            this.documentUpload.controls['cfBank'].invalid ||
+            this.documentUpload.controls['cfLimit'].invalid
+          ) {
+            this.snack.open('You left Something! ', 'OK');
+            return;
+          } else {
+            obj.TP_STATUS = 'REQUESTED_TP';
+            this.Loading = true;
+            this.http.saveNewRequestStep6(obj).subscribe({
+              next: (res) => {
+                if (res.success) {
+                  this.snack.open('Request Sent Successfully! ', 'OK');
+                  this.router.navigate(['/channelFinance/home']);
+                  this.Loading = false;
+                } else {
+                  this.Loading = false;
+                }
+              },
+              error: (error) => {
+                this.Loading = false;
+                console.warn(error);
+              },
+            });
+          }
+          break;
+        case 'HO':
+          if (
+            this.documentUpload.controls['cfBank'].invalid ||
+            this.documentUpload.controls['cfLimit'].invalid ||
+            this.documentUpload.controls['BAMLimit'].invalid ||
+            this.documentUpload.controls['ARDate'].invalid ||
+            this.documentUpload.controls['otherBankLoan'].invalid ||
+            this.documentUpload.controls['Comments'].invalid ||
+            this.documentUpload.controls['toEmail'].invalid ||
+            this.documentUpload.controls['subject'].invalid
+          ) {
+            this.snack.open('You left Something! ', 'OK');
+            return;
+          } else {
+            obj.HO_STATUS = 'APPROVED_HO';
+            obj.HO_COMMENT = this.documentUpload.controls['Comments'].value;
+            (obj.TO_MAIL_BANK = this.documentUpload.controls['toEmail']?.value),
+              (obj.CC_MAIL_LG = this.documentUpload.controls['cCEmail']?.value),
+              (this.Loading = true);
+            this.http.saveNewRequestStep6(obj).subscribe({
+              next: (res) => {
+                if (res.success) {
+                  this.snack.open('Request Sent Successfully! ', 'OK');
+                  this.Loading = false;
+                  this.router.navigate(['/channelFinance/ho']);
+                } else {
+                  this.Loading = false;
+                }
+              },
+              error: (error) => {
+                console.warn(error);
+                this.Loading = false;
+              },
+            });
+          }
+          break;
+        case 'BAM':
+          if (
+            this.documentUpload.controls['BAMLimit'].invalid ||
+            this.documentUpload.controls['ARDate'].invalid ||
+            this.documentUpload.controls['otherBankLoan'].invalid ||
+            this.documentUpload.controls['Comments'].invalid
+          ) {
+            this.snack.open('You left Something! ', 'OK');
+            return;
+          } else {
+            obj.BAM_STATUS = 'APPROVED_BAM';
+            obj.BAM_COMMENT = this.documentUpload.controls['Comments'].value;
+            this.Loading = true;
+            this.http.saveNewRequestStep6(obj).subscribe({
+              next: (res) => {
+                if (res.success) {
+                  this.Loading = false;
+                  this.snack.open('Request Sent Successfully! ', 'OK');
+                  this.router.navigate(['/channelFinance/bam']);
+                } else {
+                  this.Loading = false;
+                }
+              },
+              error: (error) => {
+                this.Loading = false;
+                console.warn(error);
+              },
+            });
+          }
+          break;
+        case 'BM':
+          if (
+            this.documentUpload.controls['BAMLimit'].invalid ||
+            this.documentUpload.controls['ARDate'].invalid ||
+            this.documentUpload.controls['otherBankLoan'].invalid ||
+            this.documentUpload.controls['Comments'].invalid
+          ) {
+            this.snack.open('You left Something! ', 'OK');
+            return;
+          } else {
+            obj.BM_STATUS = 'APPROVED_BM';
+            obj.BM_COMMENT = this.documentUpload.controls['Comments'].value;
+            this.Loading = true;
+            this.http.saveNewRequestStep6(obj).subscribe({
+              next: (res) => {
+                if (res.success) {
+                  this.Loading = false;
+                  this.snack.open('Request Sent Successfully! ', 'OK');
+                  this.router.navigate(['/channelFinance/bm']);
+                } else {
+                  this.Loading = false;
+                }
+              },
+              error: (error) => {
+                this.Loading = false;
+                console.warn(error);
+              },
+            });
+          }
+          break;
+
+        default:
+          console.log('====================================');
+          console.log('Default Error on submission');
+          console.log('====================================');
+          break;
+      }
+    } // Step 7 Logic End
+  }
+
+  RejectRequest(from: any) {
+    let obj = {
+      STEP: '7',
+      CFR_RECID: this.CRF_REC_ID,
+      ROLE: this.userType,
+      USER_TYPE: this.userType,
+      USER: this.userId,
+      CHN_FIN_BANK: this.documentUpload.controls['cfBank'].value,
+      CF_LIMIT_REQ_AMT: this.documentUpload.controls['cfLimit'].value,
+      CF_REQ_DATE: this.dateFormat.transform(this.today),
+      LAST_SELLING_YEAR:
+        this.businessWithLgDetails.controls['lastSellInYear'].value,
+      TOTAL_LAST_SALE_AMT:
+        this.businessWithLgDetails.controls['lastYearSellinValue'].value,
+      STOCK: this.documentUpload.controls['stock'].value,
+      MKT_OUTSTANDING: this.documentUpload.controls['marketOutstanding'].value,
+      TOTAL_INVESTMENT: this.documentUpload.controls['totalInvestment'].value,
+      LG_AR: this.documentUpload.controls['ARDate'].value,
+      OTHER_LG_LOAN: this.documentUpload.controls['otherBankLoan'].value,
+      TOTAL_LIABILITY: this.documentUpload.controls['totalLiability'].value,
+      NET_INVEST: this.documentUpload.controls['netInvestmentPartner'].value,
+      NET_INVEST_PERCENT:
+        this.documentUpload.controls['netInvestmentMonthly'].value,
+      BAM_LIMIT_REQ_AMT: this.documentUpload.controls['BAMLimit'].value,
+      BM_LIMIT_REQ_AMT: this.documentUpload.controls['BMLimit'].value,
+      BAM_STATUS: '',
+      BM_STATUS: '',
+      HO_STATUS: '',
+      BAM_STATUS_DATE: this.dateFormat.transform(this.today),
+      BM_STATUS_DATE: this.dateFormat.transform(this.today),
+      HO_STATUS_DATE: this.dateFormat.transform(this.today),
+      BAM_COMMENT: '',
+      BM_COMMENT: '',
+      HO_COMMENT: '',
+      TO_MAIL_BANK: '',
+      CC_MAIL_LG: '',
+      BANK_STATUS: '',
+      BANK_STATUS_DATE: this.dateFormat.transform(this.today),
+      BANK_APPROVAL_AMT: '0',
+    };
+    switch (from) {
+      case 'HO':
+        if (this.documentUpload.controls['Comments'].invalid) {
+          this.snack.open('Please Enter Comments', 'OK');
+          return;
+        } else {
+          obj.HO_STATUS = 'REJECTED_HO';
+          obj.HO_COMMENT = this.documentUpload.controls['Comments'].value;
+          (obj.TO_MAIL_BANK = this.documentUpload.controls['toEmail']?.value),
+            (obj.CC_MAIL_LG = this.documentUpload.controls['cCEmail']?.value),
+            this.http.saveNewRequestStep6(obj).subscribe({
+              next: (res) => {
+                if (res.success) {
+                  this.snack.open('Request Rejected Successfully! ', 'OK');
+                  this.router.navigate(['/channelFinance/ho']);
+                }
+              },
+              error: (error) => {
+                console.warn(error);
+              },
+            });
+        }
+        break;
+      case 'BAM':
+        if (this.documentUpload.controls['Comments'].invalid) {
+          this.snack.open('Please Enter Comments', 'OK');
+          return;
+        } else {
+          obj.BAM_STATUS = 'REJECTED_BAM';
+          obj.BAM_COMMENT = this.documentUpload.controls['Comments'].value;
+          this.http.saveNewRequestStep6(obj).subscribe({
+            next: (res) => {
+              if (res.success) {
+                this.snack.open('Request Rejected Successfully! ', 'OK');
+                this.router.navigate(['/channelFinance/bam']);
+              }
+            },
+            error: (error) => {
+              console.warn(error);
+            },
+          });
+        }
+        break;
+      case 'BM':
+        if (this.documentUpload.controls['Comments'].invalid) {
+          this.snack.open('Please Enter Comments', 'OK');
+          return;
+        } else {
+          obj.BM_STATUS = 'REJECTED_BM';
+          obj.BM_COMMENT = this.documentUpload.controls['Comments'].value;
+          this.http.saveNewRequestStep6(obj).subscribe({
+            next: (res) => {
+              if (res.success) {
+                this.snack.open('Request Rejected Successfully! ', 'OK');
+                this.router.navigate(['/channelFinance/bm']);
+              }
+            },
+            error: (error) => {
+              console.warn(error);
+            },
+          });
+        }
+        break;
+
+      default:
+        console.log('====================================');
+        console.log('Default Error On Submission');
+        console.log('====================================');
+        break;
+    }
+  }
+  productvalues:any={};
+  totalStep6(val: any) {
+    // debugger;
+    let keys = Object.keys(val == undefined?{}:val);
+    let total = 0;
+    keys?.forEach(key => {
+      if (key != "Month Year") {
+        total += +val[key]
+      }
+    })
+    var monthname=val["Month Year"];
+    this.productvalues[monthname]=total;
+    // this.getgrandtotal("");
+    // setTimeout(() => {
+    //   this.getgrandtotal("");
+    // }, 1000);
+    return total
+  }
+
+  gettotal(index:any){
+    // debugger;
+
+    let total=0;
+    this.businessProjecttion.forEach((element:any) => {
+     let data= element[index.DDL_VALUE] ? element[index.DDL_VALUE] : 0 ;
+     total=total+(+data);
+    });
+   
+    return total;
+    console.log(this.businessProjecttion);
+    return "0";
+  }
+
+  getgrandtotal(type:any){
+    // debugger;
+    try {
+      let data=this.productvalues
+      let total=0;
+      Object.keys(this.productvalues).forEach(function(key) {
+
+       debugger;
+       total=total+data[key]
+       console.log(data[key])
+      
+      });
+      return total;
+    
+    } catch (error) {
+      return 0;
+    }
+
+  
+  
+  }
+  
+
+  totalStep4and5(val: any) {
+    let keys = Object.keys(val == undefined ? {} : val);
+    let total = 0;
+    keys?.forEach((key) => {
+      if (key != 'PROD_TYPE') {
+        if (key != 'PROD_PROP') {
+          if (key != 'MONTH_YEAR') {
+            total += +val[key];
+          }
+        }
+      }
+    });
+    return total;
+  }
+
+  previous() {
+    if (this.userType == 'BM') {
+      if (this.step == 4) {
+        this.step = 3;
+      }
+      if (this.step == 6) {
+        this.step = 5;
+      }
+    }
+    this.step--;
+    if (this.step == 1) {
+      this.tradePartner_step = false;
+      console.log(this.step);
+    }
+
+    if (this.step == 2) {
+      this.firm_step = false;
+      console.log(this.step);
+    }
+
+    if (this.step == 3) {
+      this.registerAddress_step = false;
+      console.log(this.step);
+    }
+
+    if (this.step == 4) {
+      this.business_step = false;
+      console.log(this.step);
+    }
+    if (this.step == 5) {
+      this.marketOs_step = false;
+      console.log(this.step);
+    }
+
+    if (this.step == 6) {
+      this.businessWithLg_step = false;
+      console.log(this.step);
+    }
+    if (this.step == 7) {
+      this.documentUpload_step = false;
+    }
+  }
+
+  submit() {
+    if (this.step == 7) {
+      this.documentUpload_step = true;
+      if (this.documentUpload.invalid) {
+        return;
+      }
+    }
+  }
+
+  setMonthAndYear(
+    normalizedMonthAndYear: Moment,
+    datepicker: MatDatepicker<Moment>
+  ) {
+    const ctrlValue = this.date.value!;
+    // ctrlValue.month(normalizedMonthAndYear.month());
+    ctrlValue.year(normalizedMonthAndYear.year());
+    this.date.setValue(ctrlValue);
+    datepicker.close();
+  }
 }
-
-
-
