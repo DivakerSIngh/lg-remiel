@@ -35,4 +35,8 @@ Alter table tblemplyoee_report Add  PHONENUMBER	VARCHAR2(1000);
 Alter table tblemplyoee_report Add  ADDRESS12	NVARCHAR2(500);
 
 
+
+https://nextlg4all.com/onboarding/#/sso/admin/0E2C76ADEDC319EA0085927CC20D68DB63C52E484091031E1C6E2EB289828589
+
+
 Alter table tbljobs Add  JOBDEPARTMENT	VARCHAR2(100);
