@@ -22,3 +22,167 @@ Passcode: e1SRdH
 250
 India@2232
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Azure account
+
+remielsoft@outlook.com
+Bond@008
+
+
+UAT server
+
+10.101.0.136:3340
+Administrator
+Test@lg1234
+
+10.101.18.250:3340
+lge\amit.rajput
+India@2232
+or
+Rajput@2024
+
+
+Production Server(https://Nextlg4all.com/)	
+IP Address	202.154.175.51:3340
+User Name	lgdevapp
+Password	Lgapp@1qaz
+
+
+LG_EDI_SRV\Administrator
+
+
+UAT
+
+Production Server(https://Nextlg4all.com/)        
+
+IP Address          202.154.175.51:3340
+
+User Name         lgdevapp
+
+Password            Lgapp@1qaz
+
+
+
+
+
+PROD DB Server (CSR & OnBoarding)
+
+IP :192.168.20.208
+Port : 1529
+
+UserName : LGCSR   and LGROBDB
+Service Name : LGVLD
+
+
+
+
+UAT DB Server (CSR & OnBoarding)
+
+IP :192.168.20.181
+Port : 1533
+
+UserName : LGCSR   and LGROBDB
+Service Name : WEBAPP
+
+
+
+
+_________________________
+
+Amazon Test Server
+
+IP : 202.154.175.16:3340
+User Name :  Administrator
+
+Pass : Naapp@1qaz
+
+
+
+
+-----------------------------------------Database -------------------------------------------------
+
+PROD DB Server
+
+IP :192.168.20.208
+Port : 1529
+
+UserName : LGCSR   and LGROBDB
+Service Name : LGVLD
+
+
+
+
+UAT DB Server
+
+IP :192.168.20.181
+Port : 1533
+
+UserName : LGCSR   and LGROBDB
+Service Name : WEBAPP
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+------------------------------------------LG AMazon PROD Sever------------------------------------------
+
+Server IP:- 202.154.175.41
+RDP:-3340
+User:- Administrator
