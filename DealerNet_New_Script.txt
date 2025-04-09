@@ -1,0 +1,37 @@
+
+create or replace PROCEDURE CSNET_spd_update_transect_proc(p_login_id   IN VARCHAR2,
+                          p_po_number  VARCHAR2 default null,
+                          p_po_status  VARCHAR2 default null,
+                          p_trans_no  VARCHAR2 default null,
+                          p_trans_date  VARCHAR2 default null) IS
+  
+
+  /**********************************************************************************************************/
+  /*
+    /* PROJECT      : SPD 
+    /* MODULE       : To search PO list
+    /* PROGRAM NAME : CSNET_spd_update_transect_proc
+    /* DESCRIPTION  : 
+    /* REFERENCE BY :
+    /* PROGRAM HISTORY
+    /*------------------------------------------------------------------------------
+    /*   DATE            IN CHARGE                 DESCRIPTION
+        02/15/2024      Divaker Singh           Initialization
+
+  /*************************************************************************************************************/  
+
+
+    v_sql VARCHAR2(2000);
+
+  BEGIN
+  UPDATE  csnet_spd_po_detail  
+   SET  LAST_UPDATE_DATE=sysdate,
+        LAST_UPDATED_BY=p_login_id,
+        TRANSACTION_NO=p_trans_no,
+        STATUS='PAYMENT_SUCCESS',
+        TRANS_REQ_DATE= to_date(p_trans_date,'mm/dd/yyyy') 
+   WHERE  PO_NUMBER=p_po_number and STATUS=p_po_status;
+      commit;
+
+
+  END CSNET_spd_update_transect_proc;
