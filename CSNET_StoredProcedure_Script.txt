@@ -1,0 +1,3331 @@
+/* CSNET_SPD_Search_PO_PROC */
+
+create or replace procedure CSNET_SPD_Search_PO_PROC
+                            (
+                             p_created_by     IN VARCHAR2,
+                             p_po_number  VARCHAR2 default null,
+                             p_po_from_dt VARCHAR2 default null,
+                             p_po_to_dt   VARCHAR2 default null,
+                             p_sts        VARCHAR2 default null,
+                             p_po_type    VARCHAR2 default null,
+                             p_branch     VARCHAR2 default null,
+                             p_region     VARCHAR2 default null,
+                             P_PageNumber  INT DEFAULT 1,
+                             P_PageSize  INT DEFAULT 10,
+                             P_DealerType IN VARCHAR2 default null,
+                             O_TotalCount OUT NUMBER,
+                             p_out        OUT SYS_REFCURSOR) IS
+  
+                          
+                            
+    /**********************************************************************************************************/
+    /*
+    /* PROJECT      : SPD 
+    /* MODULE       : Search_PO
+    /* PROGRAM NAME : CSNET_SPD_Search_PO_PROC
+    /* DESCRIPTION  : 
+    /* REFERENCE BY :
+    /* PROGRAM HISTORY
+    /*------------------------------------------------------------------------------
+    /*   DATE            IN CHARGE                 DESCRIPTION
+        01/03/2025      KAPIL KUMAR                 Search_PO
+
+  /*************************************************************************************************************/  
+
+
+
+    v_sql VARCHAR2(2000);
+    v_sql_count VARCHAR2(2000);
+  BEGIN
+    v_sql := 'select * from (select a.*,rownum as id,
+    (
+    select 
+    --a.branch || ''(''|| Region ||'')'' 
+     a.branch
+    from csnet_dealer_def_rm_master@csnet_to_dealnet a
+    where a.branch =a.dealer_branch
+    
+    ) as  branch,
+    (select Zone from csnet_dealer_def_rm_master@csnet_to_dealnet where branch =a.dealer_branch) as  region
+    from (
+SELECT distinct 
+PO_NUMBER,
+
+to_char(c.creation_date,''dd-mm-yyyy'')PO_Date,
+c.CREATION_DATE,
+ROW_NUMBER() OVER (PARTITION BY PO_number ORDER BY c.creation_date DESC) AS rn,
+created_by PO_CREATED_BY,
+(select login_name from dnet_user_mst_syn t where t.login_id=c.created_by)dealer_name,
+(select sales_org from dnet_user_mst_syn t where t.login_id=c.created_by) dealer_branch,
+(select round(sum(order_amt),2) from csnet_spd_po_detail d
+where d.po_number=c.po_number)PO_Amount,
+TRANSACTION_NO,
+to_char(c.TRANS_REQ_DATE,''dd-mm-yyyy'')TRANS_REQ_DATE,
+to_char(c.TRANS_COMPLETION_DATE,''dd-mm-yyyy'')TRANS_COMPLETION_DATE,
+(select pkg_spd_management.fn_spd_get_status(po_number) from dual)status,
+po_type
+from csnet_spd_po_detail c
+where (''' || P_DealerType || ''' = ''SPD'' AND c.CREATED_BY LIKE ''%S'') 
+                    OR 
+                    (''' || P_DealerType || ''' = ''SPDB'' AND c.CREATED_BY LIKE ''%B'')';
+
+v_sql_count:= 'select count(*) from (
+select a.*,rownum as id,(select Zone from csnet_dealer_def_rm_master@csnet_to_dealnet where branch =a.branch) region from (
+SELECT distinct 
+PO_NUMBER,
+to_char(c.creation_date,''dd-mm-yyyy'')PO_Date,
+c.CREATION_DATE,
+ROW_NUMBER() OVER (PARTITION BY PO_number ORDER BY c.creation_date DESC) AS rn,
+created_by PO_CREATED_BY,
+(select login_name from dnet_user_mst_syn t where t.login_id=c.created_by)dealer_name,
+(select sales_org from dnet_user_mst_syn t where t.login_id=c.created_by)branch,
+(select round(sum(order_amt),2) from csnet_spd_po_detail d
+where d.po_number=c.po_number)PO_Amount,
+TRANSACTION_NO,
+to_char(c.TRANS_REQ_DATE,''dd-mm-yyyy'')TRANS_REQ_DATE,
+to_char(c.TRANS_COMPLETION_DATE,''dd-mm-yyyy'')TRANS_COMPLETION_DATE,
+(select pkg_spd_management.fn_spd_get_status(po_number) from dual)status,
+po_type
+from csnet_spd_po_detail c
+where (''' || P_DealerType || ''' = ''SPD'' AND c.CREATED_BY LIKE ''%S'') 
+                    OR 
+                    (''' || P_DealerType || ''' = ''SPDB'' AND c.CREATED_BY LIKE ''%B'')'; 
+
+    IF p_po_number IS NOT NULL THEN
+      v_sql := v_sql || 'and po_number like ''%' || p_po_number || '%''';
+      v_sql_count := v_sql_count || 'and po_number like ''%' || p_po_number || '%''';
+
+    END IF;
+
+    IF p_created_by IS NOT NULL THEN
+      v_sql := v_sql || 'and created_by=''' || p_created_by || '''';
+      v_sql_count := v_sql_count || 'and created_by=''' || p_created_by || '''';
+    END IF;
+
+
+
+    IF p_po_from_dt IS NOT NULL AND p_po_to_dt IS NOT NULL THEN
+      v_sql := v_sql || ' and to_date(creation_date) BETWEEN
+                     to_date(''' || p_po_from_dt ||
+               ''', ''mm/dd/yyyy'') AND
+                     to_date(''' || p_po_to_dt ||
+               ''', ''mm/dd/yyyy'') + .99999';
+               
+               v_sql_count := v_sql_count || ' and to_date(creation_date) BETWEEN
+                     to_date(''' || p_po_from_dt ||
+               ''', ''mm/dd/yyyy'') AND
+                     to_date(''' || p_po_to_dt ||
+               ''', ''mm/dd/yyyy'') + .99999';
+    END IF;
+    v_sql := v_sql ||
+             'order by to_date(PO_Date,''dd-mm-yyyy'')desc )a where 1=1 and rn < 2 ';
+             v_sql_count := v_sql_count ||
+             'order by to_date(PO_Date,''dd-mm-yyyy'')desc )a where 1=1 and rn < 2 ';
+
+    IF p_sts IS NOT NULL THEN
+
+      v_sql := v_sql || ' and   status=''' || p_sts || '''';
+      v_sql_count := v_sql_count || ' and   status=''' || p_sts || '''';
+
+    END IF;
+
+    IF p_po_type IS NOT NULL THEN
+
+      v_sql := v_sql || ' and   po_type=''' || p_po_type || '''';
+      v_sql_count := v_sql_count || ' and   po_type=''' || p_po_type || '''';
+
+    END IF;
+    
+    IF p_branch IS NOT NULL THEN
+      v_sql := v_sql || ' and dealer_branch=''' || p_branch || '''';
+      v_sql_count := v_sql_count || ' and branch=''' || p_branch || '''';     
+
+    END IF;
+    
+    v_sql := v_sql || ') where id between '|| (((P_PageNumber -1) * (P_PageSize ))+1) || '  and 
+    '||(P_PageNumber * P_PageSize);
+    v_sql_count := v_sql_count || ')';     
+    
+    IF p_region IS NOT NULL THEN
+      v_sql := v_sql || ' and region=''' || p_region || '''';
+      v_sql_count := v_sql_count || ' where  region=''' || p_region || '''';     
+
+    END IF;
+    
+    
+      v_sql := v_sql || ' order by CREATION_DATE desc';
+    --dbms_output.put_line(v_sql);
+   -- --dbms_output.put_line(v_sql_count);
+    OPEN p_out FOR v_sql;
+    BEGIN Execute Immediate v_sql_count into O_TotalCount; END;
+
+  END CSNET_SPD_Search_PO_PROC;
+
+-------------------------------------------------------------end-----------------------------------------------------------
+
+-------------------------------------------------------------Start----------------------------------------------------------
+
+/* CSNET_SPD_Search_SO_PROC */
+
+create or replace procedure CSNET_SPD_Search_SO_PROC
+                            (
+                             p_created_by     IN VARCHAR2,
+                             p_po_number  VARCHAR2 default null,
+                             p_po_from_dt VARCHAR2 default null,
+                             p_po_to_dt   VARCHAR2 default null,
+                             p_sts        VARCHAR2 default null,
+                             p_po_type    VARCHAR2 default null,
+                             p_branch     VARCHAR2 default null,
+                             p_region     VARCHAR2 default null,
+                              P_DealerType  VARCHAR2 default null,
+                             P_PageNumber  INT DEFAULT 1,
+                             P_PageSize  INT DEFAULT 10,
+                             O_TotalCount OUT NUMBER,
+                             p_out        OUT SYS_REFCURSOR) IS
+   
+                          
+                           
+    /**********************************************************************************************************/
+    /*
+    /* PROJECT      : SPD 
+    /* MODULE       : Search_SO
+    /* PROGRAM NAME : CSNET_SPD_Search_SO_PROC
+    /* DESCRIPTION  : 
+    /* REFERENCE BY :
+    /* PROGRAM HISTORY
+    /*------------------------------------------------------------------------------
+    /*   DATE            IN CHARGE                 DESCRIPTION
+        01/03/2025      KAPIL KUMAR                 Search_SO
+
+  /*************************************************************************************************************/  
+
+
+    v_sql VARCHAR2(2000);
+    v_sql_count VARCHAR2(2000);
+  BEGIN
+    v_sql := 'select * from (select a.*,rownum as id,(select a.dealer_branch ||''(''|| Region ||'')'' from DEALER_SCH_BRANCH_REGION_MST where branch =a.dealer_branch) as  branch,
+    (select Region from DEALER_SCH_BRANCH_REGION_MST where branch =a.dealer_branch) as  region
+    from (
+SELECT distinct 
+PO_NUMBER,
+to_char(c.creation_date,''dd-mm-yyyy'')PO_Date,
+created_by PO_CREATED_BY,
+ROW_NUMBER() OVER (PARTITION BY PO_number ORDER BY creation_date DESC) AS rn,
+(select login_name from dnet_user_mst_syn t where t.login_id=c.created_by)dealer_name,
+(select sales_org from dnet_user_mst_syn t where t.login_id=c.created_by) dealer_branch,
+(select round(sum(order_amt),2) from csnet_spd_po_detail d
+where d.po_number=c.po_number)PO_Amount,
+TRANSACTION_NO,
+to_char(c.TRANS_REQ_DATE,''dd-mm-yyyy'')TRANS_REQ_DATE,
+to_char(c.TRANS_COMPLETION_DATE,''dd-mm-yyyy'')TRANS_COMPLETION_DATE,
+(select pkg_spd_management.fn_spd_get_status(po_number) from dual)status,
+po_type
+from csnet_spd_po_detail c
+where 1=1 ';
+
+
+v_sql_count:= 'select count(*) from (
+select a.*,rownum as id,(select Region from DEALER_SCH_BRANCH_REGION_MST where branch =a.branch) region from (
+SELECT distinct 
+PO_NUMBER,
+to_char(c.creation_date,''dd-mm-yyyy'')PO_Date,
+created_by PO_CREATED_BY,
+ROW_NUMBER() OVER (PARTITION BY PO_number ORDER BY creation_date DESC) AS rn,
+(select login_name from dnet_user_mst_syn t where t.login_id=c.created_by)dealer_name,
+(select sales_org from dnet_user_mst_syn t where t.login_id=c.created_by)branch,
+(select round(sum(order_amt),2) from csnet_spd_po_detail d
+where d.po_number=c.po_number)PO_Amount,
+TRANSACTION_NO,
+to_char(c.TRANS_REQ_DATE,''dd-mm-yyyy'')TRANS_REQ_DATE,
+to_char(c.TRANS_COMPLETION_DATE,''dd-mm-yyyy'')TRANS_COMPLETION_DATE,
+(select pkg_spd_management.fn_spd_get_status(po_number) from dual)status,
+po_type
+from csnet_spd_po_detail c
+where 1=1 ';
+
+
+    IF p_po_number IS NOT NULL THEN
+      v_sql := v_sql || 'and po_number like ''%' || p_po_number || '%''';
+      v_sql_count := v_sql_count || 'and po_number like ''%' || p_po_number || '%''';
+
+    END IF;
+
+    IF p_created_by IS NOT NULL THEN
+      v_sql := v_sql || 'and created_by=''' || p_created_by || '''';
+      v_sql_count := v_sql_count || 'and created_by=''' || p_created_by || '''';
+    END IF;
+
+
+
+    IF p_po_from_dt IS NOT NULL AND p_po_to_dt IS NOT NULL THEN
+      v_sql := v_sql || ' and to_date(creation_date) BETWEEN
+                     to_date(''' || p_po_from_dt ||
+               ''', ''mm/dd/yyyy'') AND
+                     to_date(''' || p_po_to_dt ||
+               ''', ''mm/dd/yyyy'') + .99999';
+               
+               v_sql_count := v_sql_count || ' and to_date(creation_date) BETWEEN
+                     to_date(''' || p_po_from_dt ||
+               ''', ''mm/dd/yyyy'') AND
+                     to_date(''' || p_po_to_dt ||
+               ''', ''mm/dd/yyyy'') + .99999';
+    END IF;
+    v_sql := v_sql ||
+             'order by to_date(PO_Date,''dd-mm-yyyy'')desc )a where 1=1 and rn < 2 and status IN (''PAYMENT_SUCCESS'' ,''PARTIAL_SO_DISPATCH'',''SO_DISPATCH'',''PARTIAL_PO_CLOSE'') ';
+             v_sql_count := v_sql_count ||
+             'order by to_date(PO_Date,''dd-mm-yyyy'')desc )a where 1=1 and rn < 2 and status IN (''PAYMENT_SUCCESS'' ,''PARTIAL_SO_DISPATCH'',''SO_DISPATCH'',''PARTIAL_PO_CLOSE'') ';
+
+    IF p_sts IS NOT NULL THEN
+
+      v_sql := v_sql || ' and   status=''' || p_sts || '''';
+      v_sql_count := v_sql_count || ' and   status=''' || p_sts || '''';
+
+    END IF;
+
+    IF p_po_type IS NOT NULL THEN
+
+      v_sql := v_sql || ' and   po_type=''' || p_po_type || '''';
+      v_sql_count := v_sql_count || ' and   po_type=''' || p_po_type || '''';
+
+    END IF;
+    
+    IF p_branch IS NOT NULL THEN
+      v_sql := v_sql || ' and dealer_branch=''' || p_branch || '''';
+      v_sql_count := v_sql_count || ' and branch=''' || p_branch || '''';     
+
+    END IF;
+    
+    v_sql := v_sql || ') where id between '|| (((P_PageNumber -1) * (P_PageSize ))+1) || '  and 
+    '||(P_PageNumber * P_PageSize);
+    v_sql_count := v_sql_count || ')';     
+    
+    IF p_region IS NOT NULL THEN
+      v_sql := v_sql || ' and region=''' || p_region || '''';
+      v_sql_count := v_sql_count || ' where  region=''' || p_region || '''';     
+
+    END IF;
+    
+    --dbms_output.put_line(v_sql);
+   -- --dbms_output.put_line(v_sql_count);
+    OPEN p_out FOR v_sql;
+    BEGIN Execute Immediate v_sql_count into O_TotalCount; END;
+
+  END CSNET_SPD_Search_SO_PROC;
+
+
+-------------------------------------------------------------end-----------------------------------------------------------
+
+-------------------------------------------------------------Start----------------------------------------------------------
+
+
+/* CSNET_SPD_Save_Inventory_Proc */
+
+create or replace PROCEDURE CSNET_SPD_Save_Inventory_Proc
+(
+    P_Mode IN VARCHAR2,
+    P_Created_By IN VARCHAR2,
+    C_Result OUT SYS_REFCURSOR
+)
+AS
+
+                          
+    /**********************************************************************************************************/
+    /*
+    /* PROJECT      : SPD 
+    /* MODULE       : Save_Inventory
+    /* PROGRAM NAME : CSNET_SPD_Save_Inventory_Proc
+    /* DESCRIPTION  : 
+    /* REFERENCE BY :
+    /* PROGRAM HISTORY
+    /*------------------------------------------------------------------------------
+    /*   DATE            IN CHARGE                 DESCRIPTION
+        01/03/2025      KAPIL KUMAR                 Save_Inventory
+  /*************************************************************************************************************/  
+
+
+v_errmsg err_data_transfer.err_msg%TYPE;
+BEGIN
+
+    IF P_Mode = 'DeleteTempInventory' THEN
+        DELETE FROM CSNET_SPD_BULK_INVENTORY_tbl;
+        OPEN C_Result FOR
+            SELECT * FROM CSNET_SPD_BULK_INVENTORY_tbl;
+
+    ELSIF P_Mode = 'SaveInventory' THEN
+        -- Use dynamic SQL to create the temporary table
+        EXECUTE IMMEDIATE 'CREATE GLOBAL TEMPORARY TABLE temp_CSNET_SPD_BULK_INVENTORY_tbl AS
+                            SELECT * FROM CSNET_SPD_BULK_INVENTORY_tbl WHERE 1 = 0';  -- Just creating structure without data
+
+        -- Insert data based on your conditions
+        EXECUTE IMMEDIATE 'INSERT INTO temp_CSNET_SPD_BULK_INVENTORY_tbl
+                            SELECT * FROM CSNET_SPD_BULK_INVENTORY_tbl
+                            WHERE (PART_NO, WH_NAME) IN (
+                                SELECT PART_NO, WH_NAME
+                                FROM CSNET_SPD_BULK_INVENTORY_tbl
+                                GROUP BY PART_NO, WH_NAME
+                                HAVING COUNT(*) = 1
+                            )
+                            UNION ALL
+                            SELECT t.*
+                            FROM CSNET_SPD_BULK_INVENTORY_tbl t
+                            INNER JOIN (
+                                SELECT PART_NO, WH_NAME, MAX(ONHAND_QTY) AS max_qty
+                                FROM CSNET_SPD_BULK_INVENTORY_tbl
+                                GROUP BY PART_NO, WH_NAME
+                                HAVING COUNT(*) > 1
+                            ) max_vals
+                            ON t.PART_NO = max_vals.PART_NO
+                            AND t.WH_NAME = max_vals.WH_NAME
+                            AND t.ONHAND_QTY = max_vals.max_qty';
+
+        -- Delete data from CSNET_SPD_BULK_INVENTORY_tbl
+        DELETE FROM CSNET_SPD_BULK_INVENTORY_tbl;
+
+        -- Insert data back into CSNET_SPD_BULK_INVENTORY_tbl from the temporary table
+        EXECUTE IMMEDIATE 'INSERT INTO CSNET_SPD_BULK_INVENTORY_tbl
+                            SELECT * FROM temp_CSNET_SPD_BULK_INVENTORY_tbl';
+
+        -- Drop the temporary table
+        EXECUTE IMMEDIATE 'DROP TABLE temp_CSNET_SPD_BULK_INVENTORY_tbl';
+
+        -- Delete from CSNET_SPD_PART_INVENT_MST_TBL
+        DELETE FROM CSNET_SPD_PART_INVENT_MST_TBL;
+
+        -- Merge the data into CSNET_SPD_PART_INVENT_MST_TBL
+        BEGIN
+        MERGE INTO CSNET_SPD_PART_INVENT_MST_TBL mst
+        USING (
+            SELECT 
+                inv.month,
+                inv.inv_org,
+                inv.branch,
+                inv.wh_type,
+                inv.wh_name,
+                inv.zone,
+                inv.part_no,
+                inv.item_desc,
+                inv.model,
+                inv.product3_code,
+                inv.division,
+                inv.sub_inv_grade,
+                inv.sub_inv_code,
+                inv.onhand_qty,
+                inv.onhand_amount,
+                sysdate AS creation_date,
+                P_Created_By AS created_by
+            FROM 
+                CSNET_SPD_BULK_INVENTORY_tbl inv
+        ) src
+        ON (mst.part_no = src.part_no AND mst.wh_name = src.wh_name)
+        WHEN MATCHED THEN
+            UPDATE SET 
+                mst.month = src.month,
+                mst.inv_org = src.inv_org,
+                mst.branch = src.branch,
+                mst.wh_type = src.wh_type,
+                mst.zone = src.zone,
+                mst.item_desc = src.item_desc,
+                mst.model = src.model,
+                mst.product3_code = src.product3_code,
+                mst.division = src.division,
+                mst.sub_inv_grade = src.sub_inv_grade,
+                mst.sub_inv_code = src.sub_inv_code,
+                mst.onhand_qty = src.onhand_qty,
+                mst.onhand_amount = src.onhand_amount,
+                mst.last_update_date = sysdate,
+                mst.last_updated_by = src.created_by
+        WHEN NOT MATCHED THEN
+            INSERT (
+                month,
+                inv_org,
+                branch,
+                wh_type,
+                wh_name,
+                zone,
+                part_no,
+                item_desc,
+                model,
+                product3_code,
+                division,
+                sub_inv_grade,
+                sub_inv_code,
+                onhand_qty,
+                onhand_amount,
+                creation_date,
+                created_by,
+                last_update_date,
+                last_updated_by,
+                Id
+            ) VALUES (
+                src.month,
+                src.inv_org,
+                src.branch,
+                src.wh_type,
+                src.wh_name,
+                src.zone,
+                src.part_no,
+                src.item_desc,
+                src.model,
+                src.product3_code,
+                src.division,
+                src.sub_inv_grade,
+                src.sub_inv_code,
+                src.onhand_qty,
+                src.onhand_amount,
+                sysdate,
+                src.created_by,
+                sysdate,
+                src.created_by,
+                Spd_Part_Inv_seq.NextVal
+            );
+
+        COMMIT;
+        EXCEPTION
+  WHEN OTHERS THEN
+    rollback;
+    v_errmsg := SUBSTR(SQLERRM, 1, 250);
+    INSERT INTO ERR_DATA_TRANSFER
+      (PROC, ERR_MSG, ERR_DATE, STATUS)
+    VALUES
+      ('CSNET_SPD_Save_Inventory_Proc', V_ERRMSG, SYSDATE, 1);
+    COMMIT;
+
+end;
+
+        -- Open the result cursor
+        OPEN C_Result FOR
+            SELECT * FROM CSNET_SPD_PART_INVENT_MST_TBL;
+
+    END IF;
+END CSNET_SPD_Save_Inventory_Proc;
+
+-------------------------------------------------------------end-----------------------------------------------------------
+
+-------------------------------------------------------------Start----------------------------------------------------------
+
+
+/* CSNET_SPD_Part_Approval_Proc */ 
+
+create or replace procedure CSNET_SPD_Part_Approval_Proc
+                            (
+                            
+                             P_Part_No  VARCHAR2 default null,   
+                             P_Part_Type  VARCHAR2 default null,      
+                             P_Approval_Flag  VARCHAR2 default null,      
+                             P_Status  VARCHAR2 default null,      
+                             P_PageNumber  INT DEFAULT 1,
+                             P_PageSize  INT DEFAULT 10,
+                             O_TotalCount OUT NUMBER,
+                             P_Out        OUT SYS_REFCURSOR) IS
+  
+ 
+                          
+                            
+    /**********************************************************************************************************/
+    /*
+    /* PROJECT      : SPD 
+    /* MODULE       : Part_Approval
+    /* PROGRAM NAME : CSNET_SPD_Part_Approval_Proc
+    /* DESCRIPTION  : 
+    /* REFERENCE BY :
+    /* PROGRAM HISTORY
+    /*------------------------------------------------------------------------------
+    /*   DATE            IN CHARGE                 DESCRIPTION
+        01/03/2025      KAPIL KUMAR                 Part_Approval
+
+  /*************************************************************************************************************/  
+
+
+ 
+  BEGIN
+ 
+    
+    SELECT COUNT(1) 
+    INTO O_TotalCount
+    FROM CSN_SPD_PART_MRP_MST
+    WHERE 
+        (P_Part_No IS NULL OR PART_NO = P_Part_No) AND
+        (P_Part_Type IS NULL OR PART_TYPE = P_Part_Type) AND
+        (P_Approval_Flag IS NULL OR APPROVAL_FLAG = P_Approval_Flag) AND
+        (P_Status IS NULL OR ACTIVE_INACTIVE_FLAG = P_Status);
+
+
+    
+     OPEN P_Out FOR
+    SELECT * FROM (
+        SELECT a.*, rownum AS Sno
+        FROM (
+            SELECT PART_NO, PART_TYPE, MRP, ACTIVE_INACTIVE_FLAG, APPROVAL_FLAG, REMARKS, APPROVED_BY, APPROVAL_DATE, CREATED_BY, CREATION_DATE, LAST_UPDATED_BY, LAST_UPDATE_DATE
+            FROM CSN_SPD_PART_MRP_MST
+            WHERE 
+                (P_Part_No IS NULL OR PART_NO = P_Part_No) AND
+                (P_Part_Type IS NULL OR PART_TYPE = P_Part_Type) AND
+                (P_Approval_Flag IS NULL OR APPROVAL_FLAG = P_Approval_Flag) AND
+                (P_Status IS NULL OR ACTIVE_INACTIVE_FLAG = P_Status)
+        ) a
+    )
+    WHERE Sno BETWEEN (((P_PageNumber - 1) * P_PageSize) + 1) AND (P_PageNumber * P_PageSize);
+
+
+  END CSNET_SPD_Part_Approval_Proc;
+
+-------------------------------------------------------------end-----------------------------------------------------------
+
+-------------------------------------------------------------Start----------------------------------------------------------
+
+/* CSNET_SPD_CREATE_PO_PROC */ 
+
+create or replace procedure CSNET_SPD_CREATE_PO_PROC(
+                          p_part_number  VARCHAR2 default null,
+                          p_quantity number,
+                          p_part_desc   VARCHAR2 default null,
+                          p_po_number   VARCHAR2 default null,
+                          p_created_by   VARCHAR2 default null,
+                          p_created_date date,
+                          p_po_type     VARCHAR2 default null,
+                          p_delete_flag VARCHAR2 default null,
+                          p_branch      VARCHAR2 default null,
+                          p_order_amount number) is
+                          
+                           
+    /**********************************************************************************************************/
+    /*
+    /* PROJECT      : SPD 
+    /* MODULE       : CREATE_PO
+    /* PROGRAM NAME : CSNET_SPD_CREATE_PO_PROC
+    /* DESCRIPTION  : 
+    /* REFERENCE BY :
+    /* PROGRAM HISTORY
+    /*------------------------------------------------------------------------------
+    /*   DATE            IN CHARGE                 DESCRIPTION
+        01/03/2025      KAPIL KUMAR                 CREATE_PO
+
+  /*************************************************************************************************************/  
+
+
+  v_status VARCHAR2(20);
+  v_errmsg err_data_transfer.err_msg%TYPE;
+  v_cnt    NUMBER;
+begin
+v_cnt := 0;
+
+IF p_delete_flag = 'D' then
+ delete from  SPD_MY_CART_TBL@CSNET_TO_DNET09 
+           where 
+           created_by = p_created_by
+           and IS_PLACED = 0;
+           
+elsif p_delete_flag ='S' then
+ delete from  SPD_MY_CART_TBL@CSNET_TO_DNET09 
+           where part_number = p_part_number
+           and created_by = p_created_by
+           and IS_PLACED = 0;
+           
+else
+
+INSERT INTO csnet_spd_po_detail
+(
+part_no,
+part_desc,
+dealer_price,
+incentive,
+req_qty,
+order_amt,
+po_number,
+status,
+creation_date,
+created_by,
+last_update_date,
+last_updated_by,
+po_type,
+foc_ref_so,
+id,
+foc_file,
+branch
+)
+Values
+(
+p_part_number,
+p_part_desc,
+0,
+0,
+p_quantity,
+p_order_amount,
+p_po_number,
+'PO_REQUESTED',
+p_created_date,
+p_created_by,
+sysdate,
+'SYSTEM',
+p_po_type,
+0,
+hibernate_sequence.nextval,
+'',
+p_branch
+);
+
+
+end if;
+
+
+
+  commit;
+
+
+
+EXCEPTION
+  WHEN OTHERS THEN
+    rollback;
+    v_errmsg := SUBSTR(SQLERRM, 1, 250);
+    INSERT INTO ERR_DATA_TRANSFER
+      (PROC, ERR_MSG, ERR_DATE, STATUS)
+    VALUES
+      ('CSNET_SPD_CREATE_PO_PROC', V_ERRMSG, SYSDATE, 1);
+    COMMIT;
+
+end CSNET_SPD_CREATE_PO_PROC;
+
+-------------------------------------------------------------end-----------------------------------------------------------
+
+-------------------------------------------------------------Start----------------------------------------------------------
+
+
+/* CSNET_SPD_GET_PART_SCHEME_PROC */
+
+create or replace PROCEDURE CSNET_SPD_GET_PART_SCHEME_PROC(p_part_number IN VARCHAR2,
+                               p_out   OUT SYS_REFCURSOR) AS
+                          
+    /**********************************************************************************************************/
+    /*
+    /* PROJECT      : SPD 
+    /* MODULE       : GET_PART_SCHEME
+    /* PROGRAM NAME : CSNET_SPD_GET_PART_SCHEME_PROC
+    /* DESCRIPTION  : 
+    /* REFERENCE BY :
+    /* PROGRAM HISTORY
+    /*------------------------------------------------------------------------------
+    /*   DATE            IN CHARGE                 DESCRIPTION
+        01/03/2025      KAPIL KUMAR                 GET_PART_SCHEME
+
+  /*************************************************************************************************************/  
+
+
+  BEGIN
+
+      OPEN p_out FOR
+       select Product,
+       Part_no PartNumber,
+       Part_desc PartDesc,
+       Min_value MinValue,
+       Max_value MaxValue ,
+       0 Amount
+       from csnet_spd_scheme_mst where part_no = p_part_number;--'CLS32160501'
+
+  END CSNET_SPD_GET_PART_SCHEME_PROC;
+
+-------------------------------------------------------------end-----------------------------------------------------------
+
+-------------------------------------------------------------Start----------------------------------------------------------
+
+
+/* CSNET_SPD_UPDATE_PO_PROC */
+
+create or replace PROCEDURE CSNET_SPD_UPDATE_PO_PROC(p_login_id   IN VARCHAR2,
+                          p_po_number  VARCHAR2 default null,
+                          p_sts        VARCHAR2 default null,
+                          p_flag    VARCHAR2 default null,
+                          p_remarks VARCHAR2 default null,
+                          p_trans_no VARCHAR2 default null,
+                          p_out        OUT VARCHAR2) IS
+  
+
+                          
+    /**********************************************************************************************************/
+    /*
+    /* PROJECT      : SPD 
+    /* MODULE       : UPDATE_PO
+    /* PROGRAM NAME : CSNET_SPD_UPDATE_PO_PROC
+    /* DESCRIPTION  : 
+    /* REFERENCE BY :
+    /* PROGRAM HISTORY
+    /*------------------------------------------------------------------------------
+    /*   DATE            IN CHARGE                 DESCRIPTION
+        01/03/2025      KAPIL KUMAR                 UPDATE_PO
+
+  /*************************************************************************************************************/  
+
+
+  v_errmsg err_data_transfer.err_msg%TYPE;
+  v_cnt    NUMBER;
+  v_po_type VARCHAR2(20);
+  v_status VARCHAR2(30);
+
+  BEGIN
+
+    v_cnt := 0;
+    
+    select po_type into v_po_type from csnet_spd_po_detail
+        where po_number = p_po_number
+        and rownum =1; 
+
+    IF v_po_type = 'FOC' and p_sts='PO_APPROVED' then
+        v_status := 'PAYMENT_SUCCESS';
+    else
+        v_status := p_sts;
+    end if;
+BEGIN
+    update  csnet_spd_po_detail  
+    set status= v_status,
+    LAST_UPDATED_BY=p_login_id,
+   -- COMPLETION_FLAG= NVL(p_flag,COMPLETION_FLAG),
+    TRANSACTION_NO = p_trans_no,
+    LAST_UPDATE_DATE= sysdate  
+    where PO_NUMBER= p_po_number;
+    commit;
+    EXCEPTION
+  WHEN OTHERS THEN
+    rollback;
+    v_errmsg := SUBSTR(SQLERRM, 1, 250);
+    INSERT INTO ERR_DATA_TRANSFER
+      (PROC, ERR_MSG, ERR_DATE, STATUS)
+    VALUES
+      ('CSNET_SPD_UPDATE_PO_PROC', V_ERRMSG, SYSDATE, 1);
+    COMMIT;
+
+end;
+    p_out := 'Success';
+
+EXCEPTION
+  WHEN OTHERS THEN
+    rollback;
+    v_errmsg := SUBSTR(SQLERRM, 1, 250);
+     p_out := v_errmsg;
+    INSERT INTO ERR_DATA_TRANSFER
+      (PROC, ERR_MSG, ERR_DATE, STATUS)
+    VALUES
+      ('CSNET_SPD_UPDATE_PO_PROC', V_ERRMSG, SYSDATE, 1);
+    COMMIT;
+  END CSNET_SPD_UPDATE_PO_PROC;
+
+
+-------------------------------------------------------------end-----------------------------------------------------------
+
+-------------------------------------------------------------Start----------------------------------------------------------
+
+
+/* CSNET_SPD_SO_RECIEVE_PROC */
+
+create or replace procedure CSNET_SPD_SO_RECIEVE_PROC
+                            (
+                             p_created_by     IN VARCHAR2,
+                             p_search_text  VARCHAR2 default null,                             
+                             P_PageNumber  INT DEFAULT 1,
+                             P_PageSize  INT DEFAULT 10,
+                             O_TotalCount OUT NUMBER,
+                             p_out        OUT SYS_REFCURSOR) IS
+ 
+
+                          
+    /**********************************************************************************************************/
+    /*
+    /* PROJECT      : SPD 
+    /* MODULE       : SO_RECIEVE
+    /* PROGRAM NAME : CSNET_SPD_SO_RECIEVE_PROC
+    /* DESCRIPTION  : 
+    /* REFERENCE BY :
+    /* PROGRAM HISTORY
+    /*------------------------------------------------------------------------------
+    /*   DATE            IN CHARGE                 DESCRIPTION
+        01/03/2025      KAPIL KUMAR                 SO_RECIEVE
+
+  /*************************************************************************************************************/  
+
+
+  
+  BEGIN
+ 
+    --dbms_output.PUT_LINE('LOWER(p_search_text) ' || LOWER(p_search_text));
+    
+      select count(1) into O_TotalCount   FROM
+                    csnet_spd_so_receive_detail so JOIN csnet_spd_po_detail po on so.po_number=po.po_number and  so.part_no=po.part_no
+                    Where po.created_by=NVL(p_created_by,po.created_by)  and (
+                     (LOWER(po.po_number) like '%'|| LOWER(p_search_text) || '%') 
+                        OR (LOWER(so.gerp_order_no) like '%'|| LOWER(p_search_text) || '%' )
+                        OR (LOWER(po.part_no) like '%'|| LOWER(p_search_text) || '%')
+                        );
+    
+     OPEN p_out FOR
+    Select * from (
+           Select a.*, rownum as Sno FROM (
+                     SELECT
+                so.po_number AS PoNumber,
+                so.gerp_order_no AS SoNumber,
+                po.part_no  AS PartNo,
+                so.receipt_no,
+                so.part_desc AS PartDesc,
+                so.gerp_order_qty AS SoQty,
+                po.req_qty AS PoQty,
+                 po.creation_date AS PoDate,
+                so.gerp_order_date AS SoDate,
+                so.rec_qty AS ReceiveQty,
+                so.status,
+                so.creation_date,
+                so.created_by,
+                so.last_update_date,
+                so.last_updated_by,
+                so.id,
+                so.damaged_qty AS DamagedQty,
+                so.document_proof1 AS FileUploads,
+                so.document_proof2,
+                so.remarks AS Remarks,
+                so.foc_flag,
+                po.ORDER_AMT OrderAmount
+                FROM
+                    csnet_spd_so_receive_detail so JOIN csnet_spd_po_detail po on so.po_number=po.po_number and  so.part_no=po.part_no
+                    Where po.created_by=NVL(p_created_by,po.created_by) and 
+                    (
+                        (LOWER(po.po_number) like '%'|| LOWER(p_search_text) || '%') 
+                        OR (LOWER(so.gerp_order_no) like '%'|| LOWER(p_search_text) || '%' )
+                        OR (LOWER(po.part_no) like '%'|| LOWER(p_search_text) || '%')
+                     )
+                ) 
+                a)
+        
+         where Sno between (((P_PageNumber -1) * (P_PageSize ))+1)  and (P_PageNumber * P_PageSize)
+         ORDER BY PoNumber;
+    
+
+  END CSNET_SPD_SO_RECIEVE_PROC;
+
+-------------------------------------------------------------end-----------------------------------------------------------
+
+-------------------------------------------------------------Start----------------------------------------------------------
+
+
+/* CSNET_SPD_Save_Catalog_Proc */
+
+create or replace PROCEDURE CSNET_SPD_Save_Catalog_Proc
+
+                                         (
+                                           P_Mode in varchar2  DEFAULT 'GetAll',
+                                           P_Category in varchar2 DEFAULT '',
+                                           P_Document_Name in varchar2 DEFAULT '',
+                                           P_Created_By  in varchar2 DEFAULT '' ,
+                                           C_Result out SYS_REFCURSOR 
+                                         )
+
+AS 
+                          
+    /**********************************************************************************************************/
+    /*
+    /* PROJECT      : SPD 
+    /* MODULE       : Save_Catalog
+    /* PROGRAM NAME : CSNET_SPD_Save_Catalog_Proc
+    /* DESCRIPTION  : 
+    /* REFERENCE BY :
+    /* PROGRAM HISTORY
+    /*------------------------------------------------------------------------------
+    /*   DATE            IN CHARGE                 DESCRIPTION
+        01/03/2025      KAPIL KUMAR                 Save_Catalog
+
+  /*************************************************************************************************************/  
+
+v_errmsg err_data_transfer.err_msg%TYPE;
+BEGIN
+  IF P_Mode ='GetAll' THEN  
+     OPEN C_Result FOR
+        Select * from CSN_SPD_CATALOG_DOCUMENT ;
+
+  ELSIF P_Mode ='Save' THEN
+      
+             BEGIN           
+                        MERGE INTO CSN_SPD_CATALOG_DOCUMENT dst
+                USING (
+                    SELECT 
+                        p_category AS CATEGORY_CODE,
+                        p_document_name AS DOCUMENT_NAME,
+                        p_created_by AS CREATED_BY,
+                        SYSDATE AS CREATION_DATE
+                    FROM dual
+                ) src
+                ON (dst.CATEGORY_CODE = src.CATEGORY_CODE)
+                WHEN MATCHED THEN
+                    UPDATE SET 
+                        dst.DOCUMENT_NAME = src.DOCUMENT_NAME,
+                        dst.CREATED_BY = src.CREATED_BY,
+                        dst.CREATION_DATE = src.CREATION_DATE
+                WHEN NOT MATCHED THEN
+                    INSERT (
+                        CATEGORY_CODE,
+                        DOCUMENT_NAME,
+                        CREATED_BY,
+                        CREATION_DATE
+                    ) VALUES (
+                        src.CATEGORY_CODE,
+                        src.DOCUMENT_NAME,
+                        src.CREATED_BY,
+                        src.CREATION_DATE
+                    );
+
+        Commit;
+        
+EXCEPTION
+  WHEN OTHERS THEN
+    rollback;
+    v_errmsg := SUBSTR(SQLERRM, 1, 250);
+    INSERT INTO ERR_DATA_TRANSFER
+      (PROC, ERR_MSG, ERR_DATE, STATUS)
+    VALUES
+      ('CSNET_SPD_Save_Catalog_Proc', V_ERRMSG, SYSDATE, 1);
+    COMMIT;
+
+end;
+                OPEN C_Result FOR
+        Select * from CSN_SPD_CATALOG_DOCUMENT;
+  END IF;
+END CSNET_SPD_Save_Catalog_Proc;
+
+-------------------------------------------------------------end-----------------------------------------------------------
+
+-------------------------------------------------------------Start----------------------------------------------------------
+
+
+/* CSNET_SPD_Save_HSN_Proc */
+
+create or replace PROCEDURE CSNET_SPD_Save_HSN_Proc (
+   P_Mode in VARCHAR2 default '',
+   P_Created_By varchar2 default '',
+    C_Result out SYS_REFCURSOR 
+   
+)
+AS
+
+                          
+    /**********************************************************************************************************/
+    /*
+    /* PROJECT      : SPD 
+    /* MODULE       : Save_HSN
+    /* PROGRAM NAME : CSNET_SPD_Save_HSN_Proc
+    /* DESCRIPTION  : 
+    /* REFERENCE BY :
+    /* PROGRAM HISTORY
+    /*------------------------------------------------------------------------------
+    /*   DATE            IN CHARGE                 DESCRIPTION
+        01/03/2025      KAPIL KUMAR                 Save_HSN
+
+  /*************************************************************************************************************/  
+
+v_errmsg err_data_transfer.err_msg%TYPE;
+
+BEGIN
+  IF P_Mode ='DeleteTempHSN' THEN  
+   BEGIN
+    delete from CSN_SPD_HSN_MST_TEMP;
+    COMMIT;
+    EXCEPTION
+  WHEN OTHERS THEN
+    rollback;
+    v_errmsg := SUBSTR(SQLERRM, 1, 250);
+    INSERT INTO ERR_DATA_TRANSFER
+      (PROC, ERR_MSG, ERR_DATE, STATUS)
+    VALUES
+      ('CSNET_SPD_Save_HSN_Proc', V_ERRMSG, SYSDATE, 1);
+    COMMIT;
+
+end;
+     OPEN C_Result FOR
+        Select * from CSN_SPD_HSN_MST_TEMP ;
+
+  ELSIF P_Mode ='SaveHSN' THEN
+ BEGIN
+             UPDATE CSNET_MOBILE_HSN_MASTER t
+        SET t.TAX_RATE = (
+            SELECT MAX(S.TAX_RATE)  -- or MIN(S.TAX_RATE) based on your needs
+            FROM CSN_SPD_HSN_MST_TEMP S
+            WHERE t.HSN_CODE = S.HSN_CODE
+        )
+        WHERE EXISTS (
+            SELECT 1
+            FROM CSN_SPD_HSN_MST_TEMP S
+            WHERE t.HSN_CODE = S.HSN_CODE
+        );
+Commit;
+EXCEPTION
+  WHEN OTHERS THEN
+    rollback;
+    v_errmsg := SUBSTR(SQLERRM, 1, 250);
+    INSERT INTO ERR_DATA_TRANSFER
+      (PROC, ERR_MSG, ERR_DATE, STATUS)
+    VALUES
+      ('CSNET_SPD_Save_HSN_Proc', V_ERRMSG, SYSDATE, 1);
+    COMMIT;
+
+end;
+
+Begin
+        INSERT INTO CSNET_MOBILE_HSN_MASTER (
+                HSN_CODE,
+                TAX_RATE,
+                CREATED_BY,
+                CREATION_DATE
+            ) 
+        SELECT A.hsn_code,A.tax_rate,P_Created_By,current_date
+        from CSN_SPD_HSN_MST_TEMP A LEFT JOIN CSNET_MOBILE_HSN_MASTER T ON 
+            A.HSN_CODE=T.HSN_CODE
+            WHERE T.HSN_CODE IS NULL;
+       
+        
+             UPDATE csnet_mobile_part_master mpm
+        SET mpm.HSN_CODE = (
+            SELECT hsn.HSN_CODE
+            FROM CSN_SPD_HSN_MST_TEMP hsn
+            WHERE hsn.Part_no = mpm.Part_no
+        )
+        WHERE EXISTS (
+            SELECT 1
+            FROM CSN_SPD_HSN_MST_TEMP hsn
+            WHERE hsn.Part_no = mpm.Part_no
+        );
+
+ Commit;
+ 
+ EXCEPTION
+  WHEN OTHERS THEN
+    rollback;
+    v_errmsg := SUBSTR(SQLERRM, 1, 250);
+    INSERT INTO ERR_DATA_TRANSFER
+      (PROC, ERR_MSG, ERR_DATE, STATUS)
+    VALUES
+      ('CSNET_SPD_Save_HSN_Proc', V_ERRMSG, SYSDATE, 1);
+    COMMIT;
+
+end;
+                OPEN C_Result FOR
+        Select HSN_CODE,Part_No, 
+        (Select Tax_Rate FROM CSNET_MOBILE_HSN_MASTER WHERE HSN_CODE=a.HSN_CODE) AS Tax_Rate
+       from csnet_mobile_part_master a Where a.HSN_CODE IN (Select HSN_Code FROM CSN_SPD_HSN_MST_TEMP);
+  END IF;
+
+END CSNET_SPD_Save_HSN_Proc;
+
+-------------------------------------------------------------end-----------------------------------------------------------
+
+-------------------------------------------------------------Start----------------------------------------------------------
+
+
+/* CSNET_SPD_BRNCH_RGN_PROC */
+
+create or replace PROCEDURE CSNET_SPD_BRNCH_RGN_PROC(p_type IN VARCHAR2,
+                               p_region IN VARCHAR2,
+                               p_branch IN VARCHAR2,
+                               p_out   OUT SYS_REFCURSOR) AS
+
+                          
+    /**********************************************************************************************************/
+    /*
+    /* PROJECT      : SPD 
+    /* MODULE       : BRNCH_RGN
+    /* PROGRAM NAME : CSNET_SPD_BRNCH_RGN_PROC
+    /* DESCRIPTION  : 
+    /* REFERENCE BY :
+    /* PROGRAM HISTORY
+    /*------------------------------------------------------------------------------
+    /*   DATE            IN CHARGE                 DESCRIPTION
+        01/03/2025      KAPIL KUMAR                 BRNCH_RGN
+
+  /*************************************************************************************************************/  
+
+
+  BEGIN
+
+    IF p_type = 'REGION' then
+    OPEN p_out FOR
+--    Select Distinct Region as Id , Region as Value from DEALER_SCH_BRANCH_REGION_MST
+--    where Branch = NVL(p_branch,Branch)
+--    order by Region;
+
+ Select Distinct Zone as Id , Zone as Value FROM csnet_dealer_def_rm_master@csnet_to_dealnet
+     where Zone = NVL(p_branch,Zone)
+     order by Zone;
+    end if;
+    if p_type = 'BRANCH' then
+    open p_out for
+--    Select Branch as Id , Branch as Value from DEALER_SCH_BRANCH_REGION_MST
+--    where Region = NVL(p_region,Region)
+--    order by branch;
+ Select Distinct branch as Id , branch as Value FROM csnet_dealer_def_rm_master@csnet_to_dealnet
+     where branch = NVL(p_branch,branch)
+     order by branch;
+
+    end if;
+  END    CSNET_SPD_BRNCH_RGN_PROC;
+
+-------------------------------------------------------------end-----------------------------------------------------------
+
+-------------------------------------------------------------Start----------------------------------------------------------
+
+
+/* csnet_SPD_sso_user_validate_proc */
+
+create or replace PROCEDURE csnet_SPD_sso_user_validate_proc (
+    p_username   VARCHAR2,
+    p_auth_token VARCHAR2,
+    p_out        OUT SYS_REFCURSOR
+) IS
+
+
+                            
+    /**********************************************************************************************************/
+    /*
+    /* PROJECT      : SPD 
+    /* MODULE       : SPD
+    /* PROGRAM NAME : CSNET_SPD_SSO_USER_VALIDATE_PROC
+    /* DESCRIPTION  : 
+    /* REFERENCE BY :
+    /* PROGRAM HISTORY
+    /*------------------------------------------------------------------------------
+    /*   DATE            IN CHARGE                 DESCRIPTION
+        01/03/2025      KAPIL KUMAR                 SPD
+
+  /*************************************************************************************************************/  
+
+
+
+
+    v_proc       VARCHAR2(250) := 'CSNET_SSO_USER_VALIDATE_PROC';
+    v_errmsg     VARCHAR2(300);
+    v_status     VARCHAR2(250);
+    v_user_name  VARCHAR2(250);
+    v_id         NUMBER;
+    v_role_id    VARCHAR2(250);
+    v_auth_token NUMBER;
+BEGIN
+  
+ 
+    -- User details check
+    BEGIN
+        SELECT
+            u.id,
+            u.role,
+            u.login_id
+        INTO
+            v_id,
+            v_role_id,
+            v_user_name
+        FROM
+            csnetplus.csnet_user_master_v u, -- csnet_plus.csnet_user_master_v u,
+            csnet_user_auth_tb             ua
+        WHERE
+                1 = 1
+            AND u.id = ua.user_id
+         --and u.LOGIN_ID = p_encrypt.decrypt_ssn(P_USERNAME) -- DB_ency
+            AND ua.attribute1 = p_username -- Java_ency
+            AND ua.application_name = 'SPD Management'
+            AND ua.auth_token = p_auth_token
+            AND u.active_status = '1';
+    
+--      SELECT U.ID, 1 AS USER_ROLE_ID, 0 AS AUTH_TOKEN
+--        INTO V_ID, V_ROLE_ID, V_AUTH_TOKEN
+--        FROM CSNET_PLUS.DNET_USER_MST U
+--       WHERE 1 = 1
+--         AND U.LOGIN_ID = P_ENCRYPT.DECRYPT_SSN(P_USERNAME)
+--         AND U.ACTIVE_STATUS = 'A' AND  User_Type='INTERNAL'; 
+
+
+    EXCEPTION
+        WHEN OTHERS THEN
+            v_id := '0';
+            v_role_id := '0';
+            v_status := '1';
+            v_errmsg := sqlerrm
+                        || '=>'
+                        || ' USER DETAIL FETCH ISSUES FOR ';
+                       -- || p_encrypt.decrypt_ssn(p_username);
+
+            INSERT INTO err_data_transfer (
+                proc,
+                err_msg,
+                err_date,
+                status
+            ) VALUES (
+                v_proc,
+                v_errmsg,
+                sysdate,
+                v_status
+            );
+
+            COMMIT;
+    END;
+
+    --dbms_output.put_line('errrr' || v_id);
+    IF ( v_id > 0 ) THEN
+        OPEN p_out FOR
+
+         SELECT
+                                          u.id,
+                                          u.login_id,
+                                          NVL((Select Role From CSNET_SPD_USER_Role_Mapping_Tbl uap where uap.Login_Id=u.login_id),'CS_CORP') AS INTERNAL_ROLE,
+                                          u.first_name
+                                          || ' '
+                                          || u.last_name login_name,
+                                          ''             AS zone,
+                                          ''             AS region,
+                                          u.branch       AS branch_id,
+                                          (
+                                              SELECT
+                                                  company_name
+                                              FROM
+                                                  roi.company_master
+                                              WHERE
+                                                  to_char(company_cd) = u.branch
+                                          )              branch,
+                                          u.ctrl_au,
+                                          u.pricing_group_code,
+                                          u.category_name,
+                                          u.login_email_id,
+                                          u.contact_no1,
+                                          u.contact_no2,
+                                          u.role         role_id,
+                                          (
+                                              SELECT
+                                                  value
+                                              FROM
+                                                  csnet_plus.csnet_code_master
+                                              WHERE
+                                                      to_char(lookup_code) = u.role
+                                                  AND parent_lookup_type = 'UGP'
+                                                  AND lookup_type = 'ROL'
+                                                  AND parent_lookup_code = u.user_group
+                                          )              user_role_name,
+                                          u.active_status
+                                      FROM
+                                          csnetplus.csnet_user_master_v u
+                       WHERE
+                               1 = 1
+                           AND u.id = v_id;
+
+    ELSE
+        OPEN p_out FOR SELECT
+                           'NO RECORD FOUND' msg
+                       FROM
+                           dual;
+
+    END IF;
+
+END csnet_SPD_sso_user_validate_proc;
+
+-------------------------------------------------------------end-----------------------------------------------------------
+
+-------------------------------------------------------------Start----------------------------------------------------------
+
+
+/* CSNET_SPD_INS_UPD_SO_PROC * /
+
+
+
+create or replace PROCEDURE CSNET_SPD_INS_UPD_SO_PROC(P_PART_NO IN VARCHAR2,
+                                                        P_PART_DESC IN VARCHAR2,
+                                                        P_DEALER_PRICE IN decimal,
+                                                        P_REQ_QTY IN NUMBER,
+                                                        P_ORDER_AMT IN decimal,
+                                                        P_PO_NUMBER IN VARCHAR2,
+                                                        P_GERP_ORDER_NO IN VARCHAR2,
+                                                        P_GERP_ORDER_QTY IN NUMBER,
+                                                        P_GERP_ORDER_DATE IN VARCHAR2,
+                                                        P_TRANSACTION_NO IN VARCHAR2,
+                                                        P_TRANS_REQ_DATE IN VARCHAR2,
+                                                        P_TRANS_COMPLETION_DATE IN VARCHAR2,
+                                                        P_STATUS IN VARCHAR2,
+                                                        P_SO_STATUS IN VARCHAR2,
+                                                        P_CREATED_BY IN VARCHAR2,
+                                                        P_REC_QTY_LEFT IN NUMBER,
+                                                        P_RECEIPT_NO IN VARCHAR2,
+                                                        P_REC_QTY IN VARCHAR2,
+                                                        P_REC_DATE IN VARCHAR2,
+                                                        P_COURIER_NAME IN VARCHAR2,
+                                                        P_POD_NUMBER IN VARCHAR2,
+                                                        P_COMPLETION_FLAG IN VARCHAR2,
+                                                        p_out   OUT VARCHAR2) AS
+
+                           
+    /**********************************************************************************************************/
+    /*
+    /* PROJECT      : SPD 
+    /* MODULE       : INS_UPD_SO
+    /* PROGRAM NAME : CSNET_SPD_INS_UPD_SO_PROC
+    /* DESCRIPTION  : 
+    /* REFERENCE BY :
+    /* PROGRAM HISTORY
+    /*------------------------------------------------------------------------------
+    /*   DATE            IN CHARGE                 DESCRIPTION
+        01/03/2025      KAPIL KUMAR                 INS_UPD_SO
+
+  /*************************************************************************************************************/  
+
+
+v_errmsg err_data_transfer.err_msg%TYPE;
+v_count NUMBER;
+v_created_by varchar2(50);
+v_gerp_qty NUMBER:=0;
+v_status varchar2(50) :='P';
+v_part_count number;
+v_so_status varchar2(100) :='PARTIAL_SO_DISPATCH';
+v_count_firsttime number;
+  BEGIN
+
+select created_by into v_created_by from csnet_spd_po_detail
+where PO_Number  = P_PO_NUMBER
+and rownum=1;
+
+select count(1) into v_count
+from CSNET_SPD_PO_SO_DETAIL
+where PO_Number = P_PO_NUMBER
+and PART_NO = P_PART_NO;
+
+select count(1) into v_count_firsttime from csnet_spd_po_detail
+where PO_Number  = P_PO_NUMBER
+and status = 'SO_DISPATCH';
+
+If v_count_firsttime = 0 then 
+
+BEGIN
+    update csnet_spd_po_detail
+    set status = 'SO_DISPATCH',
+    completion_flag = 'P',
+    last_update_date = sysdate
+    where PO_Number = P_PO_NUMBER;
+    COMMIT;
+    
+    EXCEPTION
+  WHEN OTHERS THEN
+    rollback;
+    v_errmsg := SUBSTR(SQLERRM, 1, 250);
+    INSERT INTO ERR_DATA_TRANSFER
+      (PROC, ERR_MSG, ERR_DATE, STATUS)
+    VALUES
+      ('CSNET_SPD_INS_UPD_SO_PROC', V_ERRMSG, SYSDATE, 1);
+    COMMIT;
+
+end;
+end if;
+
+if v_count = 0 then 
+
+BEGIN
+INSERT into CSNET_SPD_PO_SO_DETAIL
+(PART_NO,
+PART_DESC,
+DEALER_PRICE,
+REQ_QTY,
+ORDER_AMT,
+PO_NUMBER,
+GERP_ORDER_NO,
+GERP_ORDER_QTY,
+GERP_ORDER_DATE,
+TRANSACTION_NO,
+--TRANS_REQ_DATE,
+--TRANS_COMPLETION_DATE,
+STATUS,
+CREATION_DATE,
+CREATED_BY,
+LAST_UPDATE_DATE,
+LAST_UPDATED_BY,
+REC_QTY_LEFT,
+RECEIPT_NO,
+REC_QTY,
+REC_DATE,
+COURIER_NAME,
+POD_NUMBER,
+COMPLETION_FLAG)
+values
+(
+P_PART_NO,
+P_PART_DESC,
+P_DEALER_PRICE,
+P_REQ_QTY,
+P_ORDER_AMT,
+P_PO_NUMBER,
+P_GERP_ORDER_NO,
+P_GERP_ORDER_QTY,
+to_date(P_GERP_ORDER_DATE,'mm/dd/yyyy'),
+P_TRANSACTION_NO,
+--to_date(P_TRANS_REQ_DATE,'mm/dd/yyyy'),
+--to_date(P_TRANS_COMPLETION_DATE,'mm/dd/yyyy'),--P_TRANS_COMPLETION_DATE,
+P_SO_STATUS,
+SYSDATE,
+P_CREATED_BY ,
+SYSDATE,
+P_CREATED_BY ,
+P_REC_QTY_LEFT,
+P_RECEIPT_NO,
+P_REC_QTY,
+P_REC_DATE,
+P_COURIER_NAME,
+P_POD_NUMBER,
+P_COMPLETION_FLAG
+);
+commit;
+
+ EXCEPTION
+  WHEN OTHERS THEN
+    rollback;
+    v_errmsg := SUBSTR(SQLERRM, 1, 250);
+    INSERT INTO ERR_DATA_TRANSFER
+      (PROC, ERR_MSG, ERR_DATE, STATUS)
+    VALUES
+      ('CSNET_SPD_INS_UPD_SO_PROC', V_ERRMSG, SYSDATE, 1);
+    COMMIT;
+END;
+else
+
+select sum(GERP_ORDER_QTY) into v_gerp_qty
+from CSNET_SPD_PO_SO_DETAIL
+where PO_Number = P_PO_NUMBER
+and PART_NO = P_PART_NO;
+
+
+BEGIN
+update CSNET_SPD_PO_SO_DETAIL
+set GERP_ORDER_QTY = v_gerp_qty + P_GERP_ORDER_QTY,
+COURIER_NAME = P_COURIER_NAME,
+POD_Number = P_POD_Number,
+GERP_ORDER_NO = P_GERP_ORDER_NO,
+GERP_ORDER_DATE = to_date(P_GERP_ORDER_DATE,'mm/dd/yyyy'),
+STATUS = P_SO_STATUS
+where PO_Number = P_PO_NUMBER
+and PART_NO = P_PART_NO;
+commit;
+
+ EXCEPTION
+  WHEN OTHERS THEN
+    rollback;
+    v_errmsg := SUBSTR(SQLERRM, 1, 250);
+    INSERT INTO ERR_DATA_TRANSFER
+      (PROC, ERR_MSG, ERR_DATE, STATUS)
+    VALUES
+      ('CSNET_SPD_INS_UPD_SO_PROC', V_ERRMSG, SYSDATE, 1);
+    COMMIT;
+END;
+end if;
+
+IF P_REQ_QTY = (v_gerp_qty + P_GERP_ORDER_QTY) then 
+--v_so_status := 'FULLY_SO_DISPATCH';
+v_status := 'F';
+else
+--v_so_status := 'PARTIAL_SO_DISPATCH';
+v_status := 'P';
+end if;
+
+
+
+BEGIN
+INSERT INTO csnet_spd_so_receive_detail (
+    po_number,
+    gerp_order_no,
+    part_no,
+    receipt_no,
+    part_desc,
+    gerp_order_qty,
+    gerp_order_date,
+    rec_qty,
+    status,
+    creation_date,
+    created_by,
+    last_update_date,
+    last_updated_by,
+    id,
+    damaged_qty,
+    document_proof1,
+    document_proof2,
+    remarks,
+    foc_flag
+) VALUES (
+    P_PO_NUMBER,
+    P_GERP_ORDER_NO,
+    P_PART_NO,
+    '2',
+    P_PART_DESC,
+    P_GERP_ORDER_QTY,
+    to_date(P_GERP_ORDER_DATE,'mm/dd/yyyy'),
+    P_REC_QTY,
+    P_STATUS,
+    SYSDATE,
+    v_created_by,
+    SYSDATE,
+    v_created_by,
+    spdl_so_seq.nextval,
+    null,
+    NULL,
+    NULL,
+    null,
+    'N'
+);
+
+commit;
+ EXCEPTION
+  WHEN OTHERS THEN
+    rollback;
+    v_errmsg := SUBSTR(SQLERRM, 1, 250);
+    INSERT INTO ERR_DATA_TRANSFER
+      (PROC, ERR_MSG, ERR_DATE, STATUS)
+    VALUES
+      ('CSNET_SPD_INS_UPD_SO_PROC', V_ERRMSG, SYSDATE, 1);
+    COMMIT;
+
+END;
+select count(*) into v_part_count from csnet_spd_po_detail
+where PO_Number = P_PO_NUMBER;
+
+
+if P_REQ_QTY = P_GERP_ORDER_QTY and v_count=0 and v_part_count=1 then
+BEGIN
+
+    update csnet_spd_po_detail
+    SET
+    status = 'SO_DISPATCH',
+    completion_flag = 'F',
+    last_update_date = sysdate
+    where PO_Number = P_PO_NUMBER
+    and PART_NO = P_PART_NO;
+    
+     commit;
+ EXCEPTION
+  WHEN OTHERS THEN
+    rollback;
+    v_errmsg := SUBSTR(SQLERRM, 1, 250);
+    INSERT INTO ERR_DATA_TRANSFER
+      (PROC, ERR_MSG, ERR_DATE, STATUS)
+    VALUES
+      ('CSNET_SPD_INS_UPD_SO_PROC', V_ERRMSG, SYSDATE, 1);
+    COMMIT;
+    END;
+ELSE
+BEGIN
+    update csnet_spd_po_detail
+    SET
+    status = 'SO_DISPATCH',
+    completion_flag = v_status,
+    last_update_date = sysdate
+    where PO_Number = P_PO_NUMBER
+    and PART_NO = P_PART_NO;
+  
+    
+    commit;
+ EXCEPTION
+  WHEN OTHERS THEN
+    rollback;
+    v_errmsg := SUBSTR(SQLERRM, 1, 250);
+    INSERT INTO ERR_DATA_TRANSFER
+      (PROC, ERR_MSG, ERR_DATE, STATUS)
+    VALUES
+      ('CSNET_SPD_INS_UPD_SO_PROC', V_ERRMSG, SYSDATE, 1);
+    COMMIT;
+    END;
+  end if;
+
+
+p_out := 'Success';
+  END CSNET_SPD_INS_UPD_SO_PROC;
+
+-------------------------------------------------------------end-----------------------------------------------------------
+
+-------------------------------------------------------------Start----------------------------------------------------------
+
+
+/* CSNET_SPD_UPD_SO_RCV_PROC */
+
+create or replace PROCEDURE CSNET_SPD_UPD_SO_RCV_PROC(P_REMAKRS IN VARCHAR2,
+                                                        P_REC_QTY IN NUMBER,
+                                                        P_DAMAGE_QTY IN NUMBER DEFAULT NULL,
+                                                        P_PO_NUMBER IN VARCHAR2,
+                                                        P_ID IN NUMBER,
+                                                        P_STATUS IN VARCHAR2,
+                                                        p_out   OUT VARCHAR2) AS
+
+                           
+    /**********************************************************************************************************/
+    /*
+    /* PROJECT      : SPD 
+    /* MODULE       : UPD_SO_RCV
+    /* PROGRAM NAME : CSNET_SPD_UPD_SO_RCV_PROC
+    /* DESCRIPTION  : 
+    /* REFERENCE BY :
+    /* PROGRAM HISTORY
+    /*------------------------------------------------------------------------------
+    /*   DATE            IN CHARGE                 DESCRIPTION
+        01/03/2025      KAPIL KUMAR                 UPD_SO_RCV
+
+  /*************************************************************************************************************/  
+
+
+v_errmsg err_data_transfer.err_msg%TYPE;
+v_count NUMBER;
+v_total_req_qty NUMBER;
+v_sum_rec_qty NUMBER;
+v_part_no VARCHAR2(250);
+v_status VARCHAR2(250);
+v_status_count number;
+V_CREATED_BY VARCHAR2(250);
+v_count_firsttime number;
+v_count_dispatch number;
+
+  BEGIN
+
+
+select count(1) into v_count_firsttime from csnet_spd_po_detail
+where PO_Number  = P_PO_NUMBER
+and status = 'PO_CLOSED';
+
+select count(1) into v_count_dispatch from csnet_spd_po_detail
+where PO_Number  = P_PO_NUMBER
+and status = 'SO_DISPATCH'
+and completion_flag = 'P';
+
+If v_count_firsttime = 0 and v_count_dispatch = 0 then 
+   BEGIN
+    update csnet_spd_po_detail
+    set status = 'PO_CLOSED',
+    completion_flag = 'P',
+    last_update_date = sysdate
+    where PO_Number = P_PO_NUMBER;
+    COMMIT;
+    EXCEPTION
+  WHEN OTHERS THEN
+    rollback;
+    v_errmsg := SUBSTR(SQLERRM, 1, 250);
+    INSERT INTO ERR_DATA_TRANSFER
+      (PROC, ERR_MSG, ERR_DATE, STATUS)
+    VALUES
+      ('CSNET_SPD_UPD_SO_RCV_PROC', V_ERRMSG, SYSDATE, 1);
+    COMMIT;
+
+end;
+
+end if;
+
+BEGIN
+
+    UPDATE csnet_spd_so_receive_detail
+    SET remarks = P_REMAKRS,
+    rec_qty = P_REC_QTY,
+    damaged_qty = case when P_DAMAGE_QTY = 0 then null else P_DAMAGE_QTY end,
+    STATUS = P_STATUS,
+    FOC_FLAG = null
+    WHERE ID = P_ID
+    AND po_number = P_PO_NUMBER;
+    
+    commit;
+    
+    EXCEPTION
+      WHEN OTHERS THEN
+        rollback;
+        v_errmsg := SUBSTR(SQLERRM, 1, 250);
+        INSERT INTO ERR_DATA_TRANSFER
+          (PROC, ERR_MSG, ERR_DATE, STATUS)
+        VALUES
+          ('CSNET_SPD_UPD_SO_RCV_PROC', V_ERRMSG, SYSDATE, 1);
+        COMMIT;
+
+end;
+
+
+select part_no into v_part_no from csnet_spd_so_receive_detail
+WHERE ID = P_ID
+AND po_number = P_PO_NUMBER;
+
+select sum(rec_qty+NVL(damaged_qty,0)) into v_sum_rec_qty
+from csnet_spd_so_receive_detail where po_number = P_PO_NUMBER
+and part_no = v_part_no;
+
+
+select req_qty,CREATED_BY into v_total_req_qty,V_CREATED_BY from csnet_spd_po_detail
+where po_number = P_PO_NUMBER
+and part_no = v_part_no;
+
+BEGIN
+IF v_sum_rec_qty = v_total_req_qty THEN
+    UPDATE csnet_spd_po_detail 
+    SET STATUS = 'PO_CLOSED',
+    completion_flag = 'F'
+    where po_number = P_PO_NUMBER
+    and part_no = v_part_no;
+else
+    UPDATE csnet_spd_po_detail 
+    SET STATUS = 'PO_CLOSED',
+    completion_flag = 'P'
+     where po_number = P_PO_NUMBER
+    and part_no = v_part_no;
+end if;
+commit;
+
+ EXCEPTION
+  WHEN OTHERS THEN
+    rollback;
+    v_errmsg := SUBSTR(SQLERRM, 1, 250);
+    INSERT INTO ERR_DATA_TRANSFER
+      (PROC, ERR_MSG, ERR_DATE, STATUS)
+    VALUES
+      ('CSNET_SPD_UPD_SO_RCV_PROC', V_ERRMSG, SYSDATE, 1);
+    COMMIT;
+
+
+END;
+
+
+p_out := 'Success';
+  END CSNET_SPD_UPD_SO_RCV_PROC;
+
+-------------------------------------------------------------end-----------------------------------------------------------
+
+-------------------------------------------------------------Start----------------------------------------------------------
+
+
+/* CSNET_SPD_GET_PART_GRADE_Proc */
+
+create or replace PROCEDURE CSNET_SPD_GET_PART_GRADE_Proc (
+    GGrade IN VARCHAR2 DEFAULT NULL,
+    GGradetype IN VARCHAR2 DEFAULT NULL,
+     p_out   OUT SYS_REFCURSOR
+)
+AS
+
+                          
+    /**********************************************************************************************************/
+    /*
+    /* PROJECT      : SPD 
+    /* MODULE       : GET_PART_GRADE
+    /* PROGRAM NAME : CSNET_SPD_GET_PART_GRADE_Proc 
+    /* DESCRIPTION  : 
+    /* REFERENCE BY :
+    /* PROGRAM HISTORY
+    /*------------------------------------------------------------------------------
+    /*   DATE            IN CHARGE                 DESCRIPTION
+        01/03/2025      KAPIL KUMAR                 GET_PART_GRADE
+
+  /*************************************************************************************************************/  
+
+
+
+
+BEGIN
+      OPEN p_out FOR
+        SELECT 
+            GRADE  GRADE,
+            GRADE_TYPE GRADE_TYPE,
+            MIN_AMT MIN_AMT,
+            MAX_AMT MAX_AMT,
+            MRP MRP,
+            CREATED_BY CREATED_BY,
+            CREATION_DATE CREATION_DATE,
+            LAST_UPDATED_BY LAST_UPDATED_BY,
+            LAST_UPDATE_DATE LAST_UPDATE_DATE
+        FROM 
+            CSN_PART_GRADE_MST 
+        WHERE 
+            --UPPER(GRADE ) IN (COALESCE(UPPER(GGrade),UPPER( GRADE))) 
+            --OR UPPER(GRADE_TYPE ) IN (COALESCE(UPPER(GGradetype),UPPER( GRADE_TYPE)));
+
+            UPPER(GRADE ) IN (COALESCE(UPPER(GGrade),UPPER( GRADE))) 
+            OR UPPER(GRADE_TYPE) LIKE '%' || COALESCE(UPPER(GGradetype), UPPER(GRADE_TYPE)) || '%';
+END CSNET_SPD_GET_PART_GRADE_Proc ;
+
+-------------------------------------------------------------end-----------------------------------------------------------
+
+-------------------------------------------------------------Start----------------------------------------------------------
+
+
+/* CSNET_SPD_ADD_UPDATE_PART_GRADE_Proc */ 
+
+create or replace PROCEDURE CSNET_SPD_ADD_UPDATE_PART_GRADE_Proc(
+    GGRADE IN VARCHAR2,
+    GGRADE_TYPE IN VARCHAR2,
+    GMIN_AMT IN NUMBER DEFAULT 0,
+    GMAX_AMT IN NUMBER DEFAULT 0,
+    GMRP IN NUMBER DEFAULT 0,
+    GIU IN NUMBER DEFAULT -1,
+    GLoggedInUserId IN VARCHAR2,
+    p_status OUT NUMBER
+)
+AS
+
+                          
+    /**********************************************************************************************************/
+    /*
+    /* PROJECT      : SPD 
+    /* MODULE       : ADD_UPDATE_PART_GRADE
+    /* PROGRAM NAME : CSNET_SPD_ADD_UPDATE_PART_GRADE_Proc
+    /* DESCRIPTION  : 
+    /* REFERENCE BY :
+    /* PROGRAM HISTORY
+    /*------------------------------------------------------------------------------
+    /*   DATE            IN CHARGE                 DESCRIPTION
+        01/03/2025      KAPIL KUMAR                 ADD_UPDATE_PART_GRADE
+
+  /*************************************************************************************************************/  
+
+
+
+    v_count NUMBER;
+BEGIN
+    SELECT COUNT(*)
+    INTO v_count
+    FROM CSN_PART_GRADE_MST
+    WHERE GRADE = GGRADE;
+
+    IF v_count > 0 AND GIU = 0 THEN
+        UPDATE CSN_PART_GRADE_MST
+        SET GRADE_TYPE = GGRADE_TYPE,
+            MIN_AMT = GMIN_AMT,
+            MAX_AMT = GMAX_AMT,
+            MRP = GMRP,
+            LAST_UPDATED_BY = GLoggedInUserId,
+            LAST_UPDATE_DATE = SYSDATE
+        WHERE GRADE = GGRADE;
+
+        p_status := 12; -- Success
+    ELSIF GIU = 1 THEN
+        INSERT INTO CSN_PART_GRADE_MST (GRADE, GRADE_TYPE, MIN_AMT, MAX_AMT, MRP, CREATED_BY, CREATION_DATE, LAST_UPDATED_BY, LAST_UPDATE_DATE)
+        VALUES (GGRADE, GGRADE_TYPE, GMIN_AMT, GMAX_AMT, GMRP, GLoggedInUserId, SYSDATE, NULL, NULL);
+
+        p_status := 11; -- Success
+    ELSE
+        p_status := 0; -- Invalid GIU value
+    END IF;
+EXCEPTION
+    WHEN OTHERS THEN
+        p_status := -1; -- Error
+END CSNET_SPD_ADD_UPDATE_PART_GRADE_Proc;
+
+-------------------------------------------------------------end-----------------------------------------------------------
+
+-------------------------------------------------------------Start----------------------------------------------------------
+
+
+/* CSNET_SPD_ADD_UPDATE_PART_MASTER_Proc */
+
+create or replace PROCEDURE CSNET_SPD_ADD_UPDATE_PART_MASTER_Proc (
+    GPART_NO IN VARCHAR2,
+    GPART_TYPE IN VARCHAR2,
+    GLoggedInUserId IN VARCHAR2,
+    GMRP IN NUMBER DEFAULT 0,
+    GACTIVE_INACTIVE_FLAG IN VARCHAR2,
+    GPART_TYPETEMP IN VARCHAR2,
+    GIU IN NUMBER DEFAULT -1,
+    p_status OUT NUMBER
+)
+AS
+
+                          
+    /**********************************************************************************************************/
+    /*
+    /* PROJECT      : SPD 
+    /* MODULE       : ADD_UPDATE_PART_MASTER
+    /* PROGRAM NAME : CSNET_SPD_ADD_UPDATE_PART_MASTER_Proc
+    /* DESCRIPTION  : 
+    /* REFERENCE BY :
+    /* PROGRAM HISTORY
+    /*------------------------------------------------------------------------------
+    /*   DATE            IN CHARGE                 DESCRIPTION
+        01/03/2025      KAPIL KUMAR                 ADD_UPDATE_PART_MASTER
+
+  /*************************************************************************************************************/  
+
+
+    v_count NUMBER;
+BEGIN
+    SELECT COUNT(*)
+    INTO v_count
+    FROM CSN_SPD_PART_MRP_MST
+    WHERE PART_NO = GPART_NO and PART_TYPE=GPART_TYPETEMP;
+
+    IF v_count > 0 AND GIU = 0 THEN
+        UPDATE CSN_SPD_PART_MRP_MST
+        SET PART_TYPE = GPART_TYPE,
+            MRP = GMRP,
+            ACTIVE_INACTIVE_FLAG = GACTIVE_INACTIVE_FLAG,
+            LAST_UPDATED_BY = GLoggedInUserId,
+            LAST_UPDATE_DATE = SYSDATE
+        WHERE PART_NO = GPART_NO AND PART_TYPE=GPART_TYPETEMP ;
+
+        p_status := 12; -- Success
+    ELSIF GIU = 1 THEN
+        INSERT INTO CSN_SPD_PART_MRP_MST (
+            PART_NO, PART_TYPE, ACTIVE_INACTIVE_FLAG, MRP, CREATED_BY,
+            CREATION_DATE, LAST_UPDATED_BY, LAST_UPDATE_DATE,
+            APPROVAL_FLAG, APPROVAL_DATE, APPROVED_BY, REMARKS
+        ) VALUES (
+            GPART_NO, GPART_TYPE, GACTIVE_INACTIVE_FLAG, GMRP, GLoggedInUserId,
+            SYSDATE, NULL, NULL, NULL, NULL, NULL, NULL
+        );
+
+        p_status := 11; -- Success
+    ELSE
+        p_status := 0; -- Invalid GIU value
+    END IF;
+EXCEPTION
+    WHEN OTHERS THEN
+        p_status := -1; -- Error
+END CSNET_SPD_ADD_UPDATE_PART_MASTER_Proc;
+
+-------------------------------------------------------------end-----------------------------------------------------------
+
+-------------------------------------------------------------Start----------------------------------------------------------
+
+
+/* CSNET_SPD_GET_SO_DTL_PROC */
+
+create or replace PROCEDURE CSNET_SPD_GET_SO_DTL_PROC(p_po_number IN VARCHAR2,
+                               p_out   OUT SYS_REFCURSOR) AS
+
+                           
+    /**********************************************************************************************************/
+    /*
+    /* PROJECT      : SPD 
+    /* MODULE       : GET_SO_DTL
+    /* PROGRAM NAME : CSNET_SPD_GET_SO_DTL_PROC
+    /* DESCRIPTION  : 
+    /* REFERENCE BY :
+    /* PROGRAM HISTORY
+    /*------------------------------------------------------------------------------
+    /*   DATE            IN CHARGE                 DESCRIPTION
+        01/03/2025      KAPIL KUMAR                 GET_SO_DTL
+
+  /*************************************************************************************************************/  
+
+
+  BEGIN
+
+      OPEN p_out FOR
+
+       
+select CSPD.PART_NO partNumber,
+CSPD.PART_DESC partDesc,
+CSPD.DEALER_PRICE dealerPrice,
+CSPD.REQ_QTY reqQty,
+CSPD.ORDER_AMT orderAmount,
+CSPD.PO_NUMBER poNumber,
+CSPSD.GERP_ORDER_NO gerpOrderNo,
+CSPD.REQ_QTY-CSPSD.GERP_ORDER_QTY gerpOrderqty,
+CSPSD.GERP_ORDER_QTY gerpTotalQty,
+CSPD.REQ_QTY-CSPSD.GERP_ORDER_QTY gerpRemQty,
+0 gerpOrderAmt,
+CSPSD.GERP_ORDER_DATE gerpOrderDate,
+CSPSD.COURIER_NAME courierName,
+CSPSD.POD_Number podNumber,
+CSPD.TRANSACTION_NO transactionNumber,
+CSPD.TRANS_REQ_DATE transactionReqDate,
+CSPD.TRANS_COMPLETION_DATE transactionCompleteDate,
+CSPSD.STATUS status
+from csnet_spd_po_so_detail CSPSD
+RIGHT JOIN csnet_spd_po_detail CSPD on CSPD.PO_NUMBER = CSPSD.PO_NUMBER 
+and CSPD.PART_NO = CSPSD.PART_NO
+where CSPD.PO_Number = p_po_number;
+
+  END CSNET_SPD_GET_SO_DTL_PROC;
+
+
+-------------------------------------------------------------end-----------------------------------------------------------
+
+-------------------------------------------------------------Start----------------------------------------------------------
+
+/* CSNET_SPD_catalog_doc_proc*/
+
+create or replace PROCEDURE CSNET_SPD_catalog_doc_proc (
+    p_PartNo IN NVARCHAR2,
+    C_Result out SYS_REFCURSOR 
+    
+)
+AS
+
+                          
+    /**********************************************************************************************************/
+    /*
+    /* PROJECT      : SPD 
+    /* MODULE       : catalog_doc
+    /* PROGRAM NAME : CSNET_SPD_catalog_doc_proc
+    /* DESCRIPTION  : 
+    /* REFERENCE BY :
+    /* PROGRAM HISTORY
+    /*------------------------------------------------------------------------------
+    /*   DATE            IN CHARGE                 DESCRIPTION
+        01/03/2025      KAPIL KUMAR                 catalog_doc
+
+  /*************************************************************************************************************/  
+
+
+
+BEGIN
+    -- Declare a cursor for the SELECT statement
+    OPEN C_Result for
+        SELECT CATEGORY_CODE, DOCUMENT_NAME
+        FROM CSN_SPD_CATALOG_DOCUMENT C JOIN csnet_mobile_part_master mst on C.CATEGORY_CODE=mst.product_level3
+        WHERE mst.PART_NO = p_PartNo;
+       
+
+    END CSNET_SPD_catalog_doc_proc;
+
+-------------------------------------------------------------end-----------------------------------------------------------
+
+-------------------------------------------------------------Start----------------------------------------------------------
+
+
+/* CSNET_SPD_MAIL_SCHEDULER_PROC */
+
+
+
+create or replace PROCEDURE CSNET_SPD_MAIL_SCHEDULER_PROC(
+    P_FromEmail IN VARCHAR2,
+    P_ToEmail IN VARCHAR2 DEFAULT NULL,
+    P_CCEmail IN VARCHAR2,  -- Corrected type to VARCHAR2
+    P_BCCEmail IN VARCHAR2, -- Corrected type to VARCHAR2
+    P_Subject IN VARCHAR2,
+    P_Body IN VARCHAR2,     -- Corrected type to VARCHAR2
+    P_PONumber IN VARCHAR2,
+    P_Mail_Type IN VARCHAR2,
+    P_OUT OUT VARCHAR2
+) AS
+
+                           
+    /**********************************************************************************************************/
+    /*
+    /* PROJECT      : SPD 
+    /* MODULE       : MAIL_SCHEDULER
+    /* PROGRAM NAME : CSNET_SPD_MAIL_SCHEDULER_PROC
+    /* DESCRIPTION  : 
+    /* REFERENCE BY :
+    /* PROGRAM HISTORY
+    /*------------------------------------------------------------------------------
+    /*   DATE            IN CHARGE                 DESCRIPTION
+        01/03/2025      KAPIL KUMAR                 MAIL_SCHEDULER
+
+  /*************************************************************************************************************/  
+
+
+
+--    V_EMAIL_ID VARCHAR2(250);
+--     V_TO_EMAIL_ID VARCHAR2(250);
+--     V_CC_EMAIL_ID VARCHAR2(250);
+--      V_BCC_EMAIL_ID VARCHAR2(250);
+--       V_WAREHouse_EMAIL_ID VARCHAR2(250) := 'sharwan.yadav@lgepartner.com';
+
+v_errmsg err_data_transfer.err_msg%TYPE;
+BEGIN
+    -- Fetch the email ID based on the Po Number and other conditions
+   
+    --Branch wise PICs
+--        SELECT attribute1 
+--        INTO V_EMAIL_ID 
+--        FROM csnet_plus.dnet_lookup_v v
+--        WHERE lookup_name = 'SPD_BRANCH_EMAILID'
+--        AND lookup_val = (
+--            SELECT SALES_ORG 
+--            FROM VW_USER_DETAILS@CSNET_TO_DNET09 
+--            WHERE LOGIN_ID = (
+--                SELECT Created_by 
+--                FROM csnet_spd_po_detail 
+--                WHERE Po_Number = P_PONumber 
+--                AND RowNum = 1
+--            )
+--        );
+--        
+--     
+--    EXCEPTION
+--        WHEN NO_DATA_FOUND THEN
+--        --dbms_output.put_line('Exception');
+--            V_EMAIL_ID := NULL;  -- Default to NULL if no value is found
+--    END;
+--
+--
+--   ---Dealer Email Id
+--        SELECT Login_Email_Id INTO V_TO_EMAIL_ID
+--            FROM VW_USER_DETAILS@CSNET_TO_DNET09 
+--            WHERE  LOGIN_ID = (
+--                SELECT Created_by 
+--                FROM csnet_spd_po_detail 
+--                WHERE Po_Number = P_PONumber 
+--                AND RowNum = 1
+--                ) AND RowNum = 1;
+--                
+----dbms_output.put_line(V_EMAIL_ID);
+--    -- Check and assign email ID based on provided conditions
+--
+--    -- Logic for mail type conditions
+--    IF P_Mail_Type = 'Create_PO' THEN
+--     
+--       V_TO_EMAIL_ID  := V_EMAIL_ID;
+--       V_CC_EMAIL_ID:=NULL; 
+--       V_CC_EMAIL_ID:=NULL;
+--       
+--    ELSIF P_Mail_Type = 'PO_APPROVED' THEN
+--      V_TO_EMAIL_ID  := V_TO_EMAIL_ID; -- Delaer
+--       V_CC_EMAIL_ID:=NULL;
+--       V_BCC_EMAIL_ID:=V_EMAIL_ID; 
+--       
+--   ELSIF P_Mail_Type = 'PAYMENT_SUCCESS' THEN
+--      V_TO_EMAIL_ID  :=V_WAREHouse_EMAIL_ID; -- Warehouse email id hardcode as discusssed with Pramod as there is only 1 email id
+--       V_CC_EMAIL_ID:=V_EMAIL_ID;
+--       V_BCC_EMAIL_ID:=NULL;
+--       
+--    ELSIF P_Mail_Type = 'Order_Dispatch' THEN
+--      V_TO_EMAIL_ID  := V_TO_EMAIL_ID;
+--       V_CC_EMAIL_ID:=NULL;
+--         V_BCC_EMAIL_ID:=V_EMAIL_ID;
+--    ELSIF P_Mail_Type = 'Docket_Acknowledge' THEN
+--        -- Set TO and BCC accordingly
+--      --  P_ToEmail := 'Dealer';  -- Example, you might want to set it dynamically
+--        V_TO_EMAIL_ID  := V_TO_EMAIL_ID; -- Dealer
+--       V_CC_EMAIL_ID:=V_EMAIL_ID || ';'|| V_WAREHouse_EMAIL_ID; -- Respective PICs
+--    END IF;
+--
+----dbms_output.put_line('ToMail = '|| V_TO_EMAIL_ID);
+
+    -- Insert data into the CSNET_SPD_Mail_Scheduler_TBL
+   BEGIN
+    INSERT INTO CSNET_SPD_Mail_Scheduler_TBL(
+        Id, FromEmail, ToEmail, CCEmail, BCCEmail, Subject, Body, IsSent, CreatedDate, Po_Number,Type
+    )
+    VALUES(
+        MailSchedulerSeq.NEXTVAL,
+        P_FromEmail,
+        P_ToEmail,  -- Corrected the reference to P_ToEmail
+        P_CCEmail,
+        P_BCCEmail,
+        P_Subject,
+        P_Body,
+        1,
+        SYSDATE,
+        P_PONumber,
+        P_Mail_Type
+    );
+    
+    COMMIT;
+    EXCEPTION
+  WHEN OTHERS THEN
+    rollback;
+    v_errmsg := SUBSTR(SQLERRM, 1, 250);
+    INSERT INTO ERR_DATA_TRANSFER
+      (PROC, ERR_MSG, ERR_DATE, STATUS)
+    VALUES
+      ('CSNET_SPD_MAIL_SCHEDULER_PROC', V_ERRMSG, SYSDATE, 1);
+    COMMIT;
+
+end;
+
+
+END CSNET_SPD_MAIL_SCHEDULER_PROC;
+-------------------------------------------------------------end-----------------------------------------------------------
+
+-------------------------------------------------------------Start----------------------------------------------------------
+
+
+/* CSNET_SPD_INS_PEND_INVENTORY_PROC */
+
+create or replace PROCEDURE CSNET_SPD_INS_PEND_INVENTORY_PROC(
+P_PartNumber IN VARCHAR2, 
+P_Quantity IN NUMBER,
+P_Inventory IN NUMBER,
+P_Email IN NVARCHAR2,
+P_CreatedBy IN NVARCHAR2,
+P_Body IN NVARCHAR2,
+P_Name IN NVARCHAR2,
+P_OUT OUT VARCHAR2
+) AS
+
+                          
+    /**********************************************************************************************************/
+    /*
+    /* PROJECT      : SPD 
+    /* MODULE       : INS_PEND_INVENTORY
+    /* PROGRAM NAME : CSNET_SPD_INS_PEND_INVENTORY_PROC
+    /* DESCRIPTION  : 
+    /* REFERENCE BY :
+    /* PROGRAM HISTORY
+    /*------------------------------------------------------------------------------
+    /*   DATE            IN CHARGE                 DESCRIPTION
+        01/03/2025      KAPIL KUMAR                 INS_PEND_INVENTORY
+
+  /*************************************************************************************************************/  
+
+
+v_errmsg err_data_transfer.err_msg%TYPE;
+BEGIN
+
+BEGIN
+
+INSERT INTO CSNET_SPD_PEND_INVENTORY_TBL(Id,
+Part_Number,
+Inventory,
+Quantity,
+IsSent,
+Email,
+Name,
+Body,
+CreatedDate,
+CreatedBy,
+LastUpdatedDate,
+LastUpdatedBy
+)
+Values
+(
+CsnetPendInventory_seq.NEXTVAL,
+P_PartNumber,
+P_Inventory,
+P_Quantity,
+0,
+P_ENCRYPT.ENCRYPT_SSN(P_EMAIL),
+P_NAME,
+P_Body,
+SYSDATE,
+P_CreatedBy,
+SYSDATE,
+P_CreatedBy
+);
+COMMIT;
+EXCEPTION
+  WHEN OTHERS THEN
+    rollback;
+    v_errmsg := SUBSTR(SQLERRM, 1, 250);
+    INSERT INTO ERR_DATA_TRANSFER
+      (PROC, ERR_MSG, ERR_DATE, STATUS)
+    VALUES
+      ('CSNET_SPD_INS_PEND_INVENTORY_PROC', V_ERRMSG, SYSDATE, 1);
+    COMMIT;
+
+end;
+
+P_OUT:='SUCCESS';
+END CSNET_SPD_INS_PEND_INVENTORY_PROC;
+
+-------------------------------------------------------------end-----------------------------------------------------------
+
+-------------------------------------------------------------Start----------------------------------------------------------
+
+
+/* CSNET_SPD_HO_RECIEVE_PROC */
+
+create or replace PROCEDURE CSNET_SPD_HO_RECIEVE_PROC(p_po_number  VARCHAR2 default null,
+                          p_out        OUT SYS_REFCURSOR) IS
+  
+                          
+    /**********************************************************************************************************/
+    /*
+    /* PROJECT      : SPD 
+    /* MODULE       : HO_RECIEVE
+    /* PROGRAM NAME : CSNET_SPD_HO_RECIEVE_PROC
+    /* DESCRIPTION  : 
+    /* REFERENCE BY :
+    /* PROGRAM HISTORY
+    /*------------------------------------------------------------------------------
+    /*   DATE            IN CHARGE                 DESCRIPTION
+        01/03/2025      KAPIL KUMAR                 HO_RECIEVE
+
+  /*************************************************************************************************************/  
+
+
+  BEGIN
+
+    open p_out for
+  SELECT
+    part_no,
+    part_desc,
+    dealer_price,
+    incentive,
+    req_qty,
+    order_amt,
+    advance_amt,
+    po_number,
+    gerp_order_no,
+    TO_NUMBER(gerp_order_qty) as gerp_order_qty,
+    gerp_order_amt,
+    TO_DATE(gerp_order_date) as gerp_order_date,
+    remarks,
+    so_qty_left,
+    rec_qty_left,
+    receipt_no,
+    rec_qty,
+    rec_date,
+    role,
+    courier_name,
+    pod_number,
+    completion_flag,
+    gst_rate,
+    gst_tax_amount,
+    foc_ref_so,
+    foc_file
+FROM
+   csnet_spd_po_detail po 
+   where po.po_number= p_po_number
+   and not exists (select 1 from csnet_spd_so_receive_detail so where so.po_number = po.po_number
+   and so.part_no = po.part_no
+   )
+   union
+                     SELECT
+                     po.part_no ,
+                     so.part_desc ,
+                     po.dealer_price,
+                     po.incentive,
+                     po.req_qty,
+                     po.order_amt,
+                     po.advance_amt,
+                     po.po_number,
+                     so.gerp_order_no,
+                    so.gerp_order_qty,
+                    po.gerp_order_amt,
+                    so.gerp_order_date,
+                    po.remarks,
+                    po.so_qty_left,
+                    po.rec_qty_left,
+                    po.receipt_no,
+                    TO_CHAR(so.rec_qty) AS rec_qty,
+                    po.rec_date,
+                    po.role,
+                    po.courier_name,
+                    po.pod_number,
+                    po.completion_flag,
+                    po.gst_rate,
+                    po.gst_tax_amount,
+                    po.foc_ref_so,
+                    po.foc_file
+                FROM
+                    csnet_spd_so_receive_detail so JOIN csnet_spd_po_detail po on so.po_number=po.po_number and  so.part_no=po.part_no
+                    Where po.po_number= p_po_number;
+
+
+  END CSNET_SPD_HO_RECIEVE_PROC;
+
+-------------------------------------------------------------end-----------------------------------------------------------
+
+-------------------------------------------------------------Start----------------------------------------------------------
+
+
+/* CSNET_SPD_SEARCH_HSN_PROC */
+
+create or replace procedure CSNET_SPD_SEARCH_HSN_PROC
+                            (p_part_number  VARCHAR2 default null,
+                             P_PageNumber  INT DEFAULT 1,
+                             P_PageSize  INT DEFAULT 10,
+                             O_TotalCount OUT NUMBER,
+                             p_out        OUT SYS_REFCURSOR) IS
+                             
+                             
+                              
+    /**********************************************************************************************************/
+    /*
+    /* PROJECT      : SPD 
+    /* MODULE       : SEARCH_HSN
+    /* PROGRAM NAME : CSNET_SPD_SEARCH_HSN_PROC
+    /* DESCRIPTION  : 
+    /* REFERENCE BY :
+    /* PROGRAM HISTORY
+    /*------------------------------------------------------------------------------
+    /*   DATE            IN CHARGE                 DESCRIPTION
+        01/03/2025      KAPIL KUMAR                 SEARCH_HSN
+
+  /*************************************************************************************************************/  
+
+
+  
+    v_sql VARCHAR2(2000);
+    v_sql_count VARCHAR2(2000);
+  BEGIN
+  --  (Select Tax_Rate FROM CSNET_MOBILE_HSN_MASTER WHERE HSN_CODE=cmpm.HSN_CODE) AS Tax_Rate
+    v_sql := 'select * from (Select cmpm.HSN_CODE,cmpm.Part_No, rownum as id,
+      HM.Tax_Rate
+       from csnet_mobile_part_master cmpm LEFT JOIN CSNET_MOBILE_HSN_MASTER HM ON HM.HSN_CODE=cmpm.HSN_CODE
+where 1=1
+';
+
+v_sql_count:= 'Select count(*)
+       from csnet_mobile_part_master cmpm LEFT JOIN CSNET_MOBILE_HSN_MASTER HM ON HM.HSN_CODE=cmpm.HSN_CODE
+where 1=1';
+
+    IF p_part_number IS NOT NULL THEN
+      v_sql := v_sql  || ' and cmpm.HSN_CODE like ''%' || p_part_number || '%''' || ' or cmpm.Part_No like ''%' || p_part_number || '%''';
+      v_sql_count := v_sql_count || ' and cmpm.HSN_CODE like ''%' || p_part_number || '%'''  || ' or cmpm.Part_No like ''%' || p_part_number || '%''';
+
+    END IF;
+    
+
+    v_sql := v_sql || ') where id between '|| (((P_PageNumber -1) * (P_PageSize ))+1) || '  and 
+    '||(P_PageNumber * P_PageSize);    
+
+
+    --dbms_output.put_line(v_sql);
+    --dbms_output.put_line(v_sql_count);
+    OPEN p_out FOR v_sql;
+    BEGIN Execute Immediate v_sql_count into O_TotalCount; END;
+
+  END CSNET_SPD_SEARCH_HSN_PROC;
+
+-------------------------------------------------------------end-----------------------------------------------------------
+
+-------------------------------------------------------------Start----------------------------------------------------------
+
+
+/* CSNET_SPD_UPDATE_HSN_PROC */
+
+create or replace PROCEDURE CSNET_SPD_UPDATE_HSN_PROC(
+                          p_hsn_number  VARCHAR2 default null,
+                          p_part_number        VARCHAR2 default null,
+                          p_updated_by   VARCHAR2 default null,
+                          p_taxRate     INT default null,
+                          p_out        OUT VARCHAR2) IS
+  
+
+                           
+    /**********************************************************************************************************/
+    /*
+    /* PROJECT      : SPD 
+    /* MODULE       : UPDATE_HSN
+    /* PROGRAM NAME : CSNET_SPD_UPDATE_HSN_PROC
+    /* DESCRIPTION  : 
+    /* REFERENCE BY :
+    /* PROGRAM HISTORY
+    /*------------------------------------------------------------------------------
+    /*   DATE            IN CHARGE                 DESCRIPTION
+        01/03/2025      KAPIL KUMAR                 UPDATE_HSN
+
+  /*************************************************************************************************************/  
+
+
+
+  v_errmsg err_data_transfer.err_msg%TYPE;
+  v_cnt    NUMBER;
+  v_po_type VARCHAR2(20);
+  v_status VARCHAR2(30);
+
+  BEGIN
+
+    v_cnt := 0;
+
+BEGIN
+    update  csnet_mobile_part_master  
+    set hsn_code= p_hsn_number,
+    LAST_MODIFIED_BY = p_updated_by,
+    LAST_MODIFICATION_DATE= sysdate  
+    where part_no = p_part_number;
+    
+    update CSNET_MOBILE_HSN_MASTER
+    set Tax_Rate = p_taxRate
+    where hsn_code = p_hsn_number;
+    
+    commit;
+    EXCEPTION
+  WHEN OTHERS THEN
+    rollback;
+    v_errmsg := SUBSTR(SQLERRM, 1, 250);
+    INSERT INTO ERR_DATA_TRANSFER
+      (PROC, ERR_MSG, ERR_DATE, STATUS)
+    VALUES
+      ('CSNET_SPD_UPDATE_HSN_PROC', V_ERRMSG, SYSDATE, 1);
+    COMMIT;
+
+end;
+    p_out := 'Success';
+
+EXCEPTION
+  WHEN OTHERS THEN
+    rollback;
+    v_errmsg := SUBSTR(SQLERRM, 1, 250);
+     p_out := v_errmsg;
+    INSERT INTO ERR_DATA_TRANSFER
+      (PROC, ERR_MSG, ERR_DATE, STATUS)
+    VALUES
+      ('CSNET_SPD_UPDATE_HSN_PROC', V_ERRMSG, SYSDATE, 1);
+    COMMIT;
+  END CSNET_SPD_UPDATE_HSN_PROC;
+
+-------------------------------------------------------------end-----------------------------------------------------------
+
+-------------------------------------------------------------Start----------------------------------------------------------
+
+
+/* CSNET_SPD_GET_INVENTORY_PROC */
+
+create or replace PROCEDURE CSNET_SPD_GET_INVENTORY_PROC
+(
+    P_Part_Number VARCHAR2,
+    P_PageNumber INT DEFAULT 1,
+    P_PageSize INT DEFAULT 10,
+    O_TotalCount OUT NUMBER,
+    C_Result OUT SYS_REFCURSOR
+)
+AS 
+
+                          
+    /**********************************************************************************************************/
+    /*
+    /* PROJECT      : SPD 
+    /* MODULE       : GET_INVENTORY
+    /* PROGRAM NAME : CSNET_SPD_GET_INVENTORY_PROC
+    /* DESCRIPTION  : 
+    /* REFERENCE BY :
+    /* PROGRAM HISTORY
+    /*------------------------------------------------------------------------------
+    /*   DATE            IN CHARGE                 DESCRIPTION
+        01/03/2025      KAPIL KUMAR                 GET_INVENTORY
+
+  /*************************************************************************************************************/  
+
+
+
+BEGIN
+    -- Open cursor to return filtered result with pagination
+    OPEN C_Result FOR
+    SELECT * FROM 
+    (
+        SELECT c.*, rownum AS RowNo
+        FROM CSNET_SPD_PART_INVENT_MST_TBL c
+        WHERE 
+            (
+                (UPPER(c.part_no) LIKE '%' || UPPER(P_Part_Number) || '%')
+                OR (UPPER(c.item_desc) LIKE '%' || UPPER(P_Part_Number) || '%')
+                OR (UPPER(c.model) LIKE '%' || UPPER(P_Part_Number) || '%')
+                OR P_Part_Number IS NULL
+            )
+    )
+    WHERE RowNo BETWEEN (((P_PageNumber - 1) * P_PageSize) + 1) AND (P_PageNumber * P_PageSize);
+
+    -- Get the total count of matching records
+    SELECT COUNT(*) INTO O_TotalCount
+    FROM CSNET_SPD_PART_INVENT_MST_TBL c
+    WHERE 
+        (
+            (UPPER(c.part_no) LIKE '%' || UPPER(P_Part_Number) || '%')
+            OR (UPPER(c.item_desc) LIKE '%' || UPPER(P_Part_Number) || '%')
+            OR (UPPER(c.model) LIKE '%' || UPPER(P_Part_Number) || '%')
+            OR P_Part_Number IS NULL
+        );
+END CSNET_SPD_GET_INVENTORY_PROC;
+
+-------------------------------------------------------------end-----------------------------------------------------------
+
+-------------------------------------------------------------Start----------------------------------------------------------
+
+
+/* CSNET_SPD_PEND_INVENTORY_PROC */
+
+create or replace PROCEDURE      CSNET_SPD_PEND_INVENTORY_PROC
+                                        (
+                                         P_Mode IN VARCHAR  DEFAULT 'GetPendingInventory',
+                                         P_SearchText IN VARCHAR DEFAULT '',
+                                         P_PageSize IN INT DEFAULT 1, 
+                                         P_PageNumber IN INT DEFAULT 10, 
+                                         O_TotalCount OUT INT,
+                                         C_Inventory out SYS_REFCURSOR                                         
+                                        )
+AS
+
+                          
+    /**********************************************************************************************************/
+    /*
+    /* PROJECT      : SPD 
+    /* MODULE       : PEND_INVENTORY
+    /* PROGRAM NAME : CSNET_SPD_PEND_INVENTORY_PROC
+    /* DESCRIPTION  : 
+    /* REFERENCE BY :
+    /* PROGRAM HISTORY
+    /*------------------------------------------------------------------------------
+    /*   DATE            IN CHARGE                 DESCRIPTION
+        01/03/2025      KAPIL KUMAR                 PEND_INVENTORY
+
+  /*************************************************************************************************************/  
+
+
+
+BEGIN
+
+        SELECT 
+            COUNT(1)
+        INTO O_TotalCount
+        FROM CSNET_SPD_PEND_INVENTORY_TBL
+        WHERE (LOWER(NAME) like '%' || lower(P_SearchText) || '%'
+                OR p_encrypt.decrypt_ssn(EMAIL) like '%' || lower(P_SearchText) || '%'
+               -- OR LOWER(EMAIL) like '%' || lower(P_SearchText) || '%'
+                OR LOWER(PART_NUMBER) like '%' || lower(P_SearchText) || '%'
+                );
+
+    OPEN C_Inventory FOR    
+    SELECT 
+        Id,
+        NAME,
+    --  (select P_ENCRYPT_SYN.DECRYPT_SSN(EMAIL)from DUAL ) AS 
+      p_encrypt.decrypt_ssn(EMAIL) EMAIL,
+        PART_NUMBER as "PartNumber",
+        QUANTITY INVENTORY,
+        INVENTORY QUANTITY,
+        CREATEDDATE
+    FROM CSNET_SPD_PEND_INVENTORY_TBL
+    WHERE (LOWER(NAME) like '%' || lower(P_SearchText) || '%'
+                OR p_encrypt.decrypt_ssn(EMAIL) like '%' || lower(P_SearchText) || '%'
+         --       OR LOWER(EMAIL) like '%' || lower(P_SearchText) || '%'
+                OR LOWER(PART_NUMBER) like '%' || lower(P_SearchText) || '%'
+                )
+    ORDER BY Id DESC OFFSET ((P_PageNumber - 1) * P_PageSize) ROWS
+        FETCH NEXT P_PageSize ROWS ONLY;
+
+END CSNET_SPD_PEND_INVENTORY_PROC;
+
+-------------------------------------------------------------end-----------------------------------------------------------
+
+-------------------------------------------------------------Start----------------------------------------------------------
+
+
+
+create or replace PROCEDURE CSNET_SPD_SCHEDULE_INV_PROC(P_FROM_EMAIL IN VARCHAR2,
+                                                        P_OUT OUT VARCHAR2) AS
+                                                        
+                           
+    /**********************************************************************************************************/
+    /*
+    /* PROJECT      : SPD 
+    /* MODULE       : SCHEDULE_INV
+    /* PROGRAM NAME : CSNET_SPD_SCHEDULE_INV_PROC
+    /* DESCRIPTION  : 
+    /* REFERENCE BY :
+    /* PROGRAM HISTORY
+    /*------------------------------------------------------------------------------
+    /*   DATE            IN CHARGE                 DESCRIPTION
+        01/03/2025      KAPIL KUMAR                 SCHEDULE_INV
+
+  /*************************************************************************************************************/  
+
+
+V_EMAIL_ID     VARCHAR2(250);
+v_errmsg err_data_transfer.err_msg%TYPE;
+ 
+CURSOR c1  
+   IS 
+Select  
+pi.id,
+P_FROM_EMAIL FromEmail,
+P_ENCRYPT.DECRYPT_SSN(pi.EMAIL) EMAIL,'Required LG spare part Availability intimation ' || pi.CREATEDBY AS Subject,
+pi.CREATEDBY AS CreatedBY,
+pi.Body,0 IsSent,SYSDATE CreationDate from CSNET_SPD_PEND_INVENTORY_TBL pi, CSNET_SPD_PART_INVENT_MST_TBL im, CSNET_SPD_BRANCH_WH_MAP_TBL wh
+where NVL(pi.IsSent,0)=0 AND im.WH_NAME=wh.WH_Name AND wh.Branch=(Select CTRL_AU from DNET_USER_MST@CSNET_TO_DNET09 where Login_Id=pi.CreatedBy ) AND Rownum=1
+and im.part_no= pi.Part_Number and  (im.onhand_qty  - (select NVL(sum(req_qty),0)
+                                  from csnet_spd_po_detail t
+                                 where t.part_no = im.part_no
+                                   and creation_date >= trunc(sysdate)
+                                   and Status not in ('PO_REJECTED','PO_CANCELLED'))) >= pi.Inventory;
+       rec c1%rowtype;
+
+BEGIN
+
+ open c1;
+ loop
+fetch c1 into rec;
+exit when c1%notfound;
+BEGIN
+INSERT INTO CSNET_SPD_Mail_Scheduler_TBL(Id,
+FromEmail,
+ToEmail,
+Subject,
+Body,
+Type,
+Attribute1,
+IsSent,
+CreatedDate
+)
+values(
+CsnetPendInventory_seq.NextVal,
+P_FROM_EMAIL,
+rec.EMAIL,
+rec.Subject ,
+rec.Body,
+'Part_Intimation',
+rec.CreatedBY,
+0,
+SYSDATE );
+
+COMMIT;
+
+EXCEPTION
+  WHEN OTHERS THEN
+    rollback;
+    v_errmsg := SUBSTR(SQLERRM, 1, 250);
+    INSERT INTO ERR_DATA_TRANSFER
+      (PROC, ERR_MSG, ERR_DATE, STATUS)
+    VALUES
+      ('CSNET_SPD_SCHEDULE_INV_PROC', V_ERRMSG, SYSDATE, 1);
+    COMMIT;
+
+end;
+
+
+BEGIN
+UPDATE CSNET_SPD_PEND_INVENTORY_TBL
+set ISSENT = 1,
+LastUpdatedDate = SYSDATE,
+LastUpdatedBy = 'SYSTEM'
+where id = rec.id;
+COMMIT;
+
+
+EXCEPTION
+  WHEN OTHERS THEN
+    rollback;
+    v_errmsg := SUBSTR(SQLERRM, 1, 250);
+    INSERT INTO ERR_DATA_TRANSFER
+      (PROC, ERR_MSG, ERR_DATE, STATUS)
+    VALUES
+      ('CSNET_SPD_SCHEDULE_INV_PROC', V_ERRMSG, SYSDATE, 1);
+    COMMIT;
+
+end;
+
+ END LOOP;  
+
+P_OUT:='SUCCESS';
+END CSNET_SPD_SCHEDULE_INV_PROC;
+
+-------------------------------------------------------------end-----------------------------------------------------------
+
+-------------------------------------------------------------Start----------------------------------------------------------
+
+
+/* CSNET_SPD_MAIL_UPDATE_PROC */
+
+create or replace PROCEDURE CSNET_SPD_MAIL_UPDATE_PROC IS
+
+                          
+    /**********************************************************************************************************/
+    /*
+    /* PROJECT      : SPD 
+    /* MODULE       : MAIL_UPDATE
+    /* PROGRAM NAME : CSNET_SPD_MAIL_UPDATE_PROC
+    /* DESCRIPTION  : 
+    /* REFERENCE BY :
+    /* PROGRAM HISTORY
+    /*------------------------------------------------------------------------------
+    /*   DATE            IN CHARGE                 DESCRIPTION
+        01/03/2025      KAPIL KUMAR                 MAIL_UPDATE
+
+  /*************************************************************************************************************/  
+
+
+    CURSOR scheduler_cursor IS
+        SELECT Id, Po_Number, Type AS P_Mail_Type, Attribute1
+        FROM CSNET_SPD_Mail_Scheduler_TBL
+        WHERE IsSent = 1;
+
+    -- Variables to store email IDs
+    V_EMAIL_ID VARCHAR2(255);
+    V_TO_EMAIL_ID VARCHAR2(255);
+    V_CC_EMAIL_ID VARCHAR2(255);
+    V_BCC_EMAIL_ID VARCHAR2(255);
+    V_WAREHOUSE_EMAIL_ID VARCHAR2(255) := 'sharwan.yadav@lgepartner.com'; 
+
+BEGIN
+BEGIN
+    FOR record IN scheduler_cursor LOOP
+        BEGIN
+        
+            -- Part_Intimation case
+            IF record.P_Mail_Type = 'Part_Intimation' THEN
+                --dbms_output.PUT_LINE(record.P_Mail_Type);
+                
+                -- Fetch Login Email for Part_Intimation
+                SELECT Login_Email_Id
+                INTO V_TO_EMAIL_ID
+                FROM VW_USER_DETAILS@CSNET_TO_DNET09
+                WHERE LOGIN_ID = record.Attribute1
+                AND ROWNUM = 1; 
+                
+                --dbms_output.PUT_LINE(V_TO_EMAIL_ID);
+                
+                -- Fetch Branch Email based on the SALES_ORG for Part_Intimation
+                SELECT attribute1
+                INTO V_EMAIL_ID
+                FROM csnet_plus.dnet_lookup_v v
+                WHERE lookup_name = 'SPD_BRANCH_EMAILID'
+                AND lookup_val = (
+                    SELECT SALES_ORG
+                    FROM VW_USER_DETAILS@CSNET_TO_DNET09
+                    WHERE LOGIN_ID = record.Attribute1
+                );
+
+                --dbms_output.PUT_LINE(V_EMAIL_ID);
+
+                -- Set the email variables for Part_Intimation
+                V_TO_EMAIL_ID := V_TO_EMAIL_ID;
+                V_CC_EMAIL_ID := V_EMAIL_ID;
+                V_BCC_EMAIL_ID := NULL;
+
+            ELSE
+                -- Fetch V_EMAIL_ID based on logic for other mail types
+                SELECT attribute1
+                INTO V_EMAIL_ID
+                FROM csnet_plus.dnet_lookup_v v
+                WHERE lookup_name = 'SPD_BRANCH_EMAILID'
+                AND lookup_val = (
+                    SELECT SALES_ORG
+                    FROM VW_USER_DETAILS@CSNET_TO_DNET09
+                    WHERE LOGIN_ID = (
+                        SELECT Created_by
+                        FROM csnet_spd_po_detail
+                        WHERE Po_Number = record.Po_Number 
+                        AND ROWNUM = 1
+                    )
+                );
+
+                -- Fetch Dealer Email ID
+                SELECT Login_Email_Id
+                INTO V_TO_EMAIL_ID
+                FROM VW_USER_DETAILS@CSNET_TO_DNET09
+                WHERE LOGIN_ID = (
+                    SELECT Created_by
+                    FROM csnet_spd_po_detail
+                    WHERE Po_Number = record.Po_Number 
+                    AND ROWNUM = 1
+                )
+                AND ROWNUM = 1;
+
+                -- Initialize email variables
+                V_CC_EMAIL_ID := NULL;
+                V_BCC_EMAIL_ID := NULL;
+
+                -- Apply logic based on P_Mail_Type
+                IF record.P_Mail_Type = 'Create_PO' THEN
+                    V_TO_EMAIL_ID := V_EMAIL_ID;
+                    V_CC_EMAIL_ID := NULL;
+                    V_BCC_EMAIL_ID := NULL;
+
+                ELSIF record.P_Mail_Type = 'PO_APPROVED' THEN
+                    V_TO_EMAIL_ID := V_TO_EMAIL_ID;
+                    V_CC_EMAIL_ID := NULL;
+                    V_BCC_EMAIL_ID := V_EMAIL_ID;
+
+                ELSIF record.P_Mail_Type = 'PAYMENT_SUCCESS' THEN
+                    V_TO_EMAIL_ID := V_WAREHOUSE_EMAIL_ID;
+                    V_CC_EMAIL_ID := V_EMAIL_ID;
+                    V_BCC_EMAIL_ID := NULL;
+
+                ELSIF record.P_Mail_Type = 'Order_Dispatch' THEN
+                    V_TO_EMAIL_ID := V_TO_EMAIL_ID;
+                    V_CC_EMAIL_ID := NULL;
+                    V_BCC_EMAIL_ID := V_EMAIL_ID;
+
+                ELSIF record.P_Mail_Type = 'Docket_Acknowledge' THEN
+                    V_TO_EMAIL_ID := V_TO_EMAIL_ID;
+                    V_CC_EMAIL_ID := V_EMAIL_ID || ';' || V_WAREHOUSE_EMAIL_ID;
+                    V_BCC_EMAIL_ID := NULL;
+                END IF;
+
+            END IF;    
+
+            -- Update the table with the computed email values
+            UPDATE CSNET_SPD_Mail_Scheduler_TBL
+            SET ToEmail = V_TO_EMAIL_ID,
+                CCEmail = V_CC_EMAIL_ID,
+                BCCEmail = V_BCC_EMAIL_ID
+            WHERE Id = record.Id;
+
+        EXCEPTION
+            WHEN NO_DATA_FOUND THEN
+                --dbms_output.PUT_LINE('No data found for Po_Number: ' || record.Po_Number);
+            WHEN OTHERS THEN
+                --dbms_output.PUT_LINE('Error processing Po_Number: ' || record.Po_Number || ' - ' || SQLERRM);
+        END;
+    END LOOP;
+
+    COMMIT;
+    
+    EXCEPTION
+  WHEN OTHERS THEN
+    rollback;
+    v_errmsg := SUBSTR(SQLERRM, 1, 250);
+    INSERT INTO ERR_DATA_TRANSFER
+      (PROC, ERR_MSG, ERR_DATE, STATUS)
+    VALUES
+      ('CSNET_SPD_MAIL_UPDATE_PROC', V_ERRMSG, SYSDATE, 1);
+    COMMIT;
+
+end;
+    
+END CSNET_SPD_MAIL_UPDATE_PROC;
+
+-------------------------------------------------------------end-----------------------------------------------------------
+
+-------------------------------------------------------------Start----------------------------------------------------------
+
+
+/* CSNET_SPD_UPDT_MOBILE_PRT_PROC */
+
+create or replace PROCEDURE CSNET_SPD_UPDT_MOBILE_PRT_PROC(
+                          P_hsn_code  VARCHAR2 default null,
+                          P_part_desc   VARCHAR2 default null,
+                          P_MIN_ORDER_QTY   INT default null,
+                          P_UNIT_PRICE DECIMAL default null,
+                          P_ACTIVE_STATUS VARCHAR2 default null,
+                          P_AMC_TCR_ITEM VARCHAR2 default null,
+                          P_PART_NUMBER VARCHAR2,
+                          p_updated_by VARCHAR2 default null,
+                          p_out        OUT VARCHAR2) IS
+  
+
+                           
+    /**********************************************************************************************************/
+    /*
+    /* PROJECT      : SPD 
+    /* MODULE       : UPDT_MOBILE_PRT
+    /* PROGRAM NAME : CSNET_SPD_UPDT_MOBILE_PRT_PROC
+    /* DESCRIPTION  : 
+    /* REFERENCE BY :
+    /* PROGRAM HISTORY
+    /*------------------------------------------------------------------------------
+    /*   DATE            IN CHARGE                 DESCRIPTION
+        01/03/2025      KAPIL KUMAR                 UPDT_MOBILE_PRT
+
+  /*************************************************************************************************************/  
+
+
+
+  v_errmsg err_data_transfer.err_msg%TYPE;
+  v_cnt    NUMBER;
+  v_po_type VARCHAR2(20);
+  v_status VARCHAR2(30);
+
+  BEGIN
+
+    v_cnt := 0;
+
+
+     update csnet_mobile_part_master
+        set AMC_TCR_ITEM = P_AMC_TCR_ITEM,
+        ACTIVE_STATUS = P_ACTIVE_STATUS,
+        UNIT_PRICE = P_UNIT_PRICE,
+        MIN_ORDER_QTY = P_MIN_ORDER_QTY,
+        part_desc = P_part_desc,
+        hsn_code = P_hsn_code,
+        LAST_MODIFIED_BY = p_updated_by,
+        LAST_MODIFICATION_DATE= sysdate 
+        where part_no = P_PART_NUMBER;
+
+    commit;
+    p_out := 'Success';
+
+EXCEPTION
+  WHEN OTHERS THEN
+    rollback;
+    v_errmsg := SUBSTR(SQLERRM, 1, 250);
+     p_out := v_errmsg;
+    INSERT INTO ERR_DATA_TRANSFER
+      (PROC, ERR_MSG, ERR_DATE, STATUS)
+    VALUES
+      ('CSNET_SPD_UPDT_MOBILE_PRT_PROC', V_ERRMSG, SYSDATE, 1);
+    COMMIT;
+  END CSNET_SPD_UPDT_MOBILE_PRT_PROC;
+
+-------------------------------------------------------------end-----------------------------------------------------------
+
+-------------------------------------------------------------Start----------------------------------------------------------
+
+/* CSNET_SPD_CREATE_FOC_PO_PROC */
+
+create or replace PROCEDURE CSNET_SPD_CREATE_FOC_PO_PROC IS
+
+
+  
+                            
+    /**********************************************************************************************************/
+    /*
+    /* PROJECT      : SPD 
+    /* MODULE       : create_foc_po
+    /* PROGRAM NAME : CSNET_SPD_CREATE_FOC_PO_PROC
+    /* DESCRIPTION  : 
+    /* REFERENCE BY :
+    /* PROGRAM HISTORY
+    /*------------------------------------------------------------------------------
+    /*   DATE            IN CHARGE                 DESCRIPTION
+        01/03/2025      KAPIL KUMAR                 create_foc_po
+
+  /*************************************************************************************************************/  
+
+
+
+CURSOR cur_so IS
+SELECT DISTINCT GERP_ORDER_NO,CREATED_BY
+from csnet_spd_so_receive_detail d
+WHERE damaged_qty IS NOT NULL and damaged_qty>0
+and creation_date>=trunc(sysdate)-9
+and foc_flag is null;
+v_po_no VARCHAR2(100);
+v_cnt number;
+v_file VARCHAR2(1000);
+V_ERRMSG VARCHAR2(250);
+
+BEGIN
+
+FOR i in cur_so LOOP
+v_po_no:=null;
+v_po_no:='FCP'||i.created_by||to_char(sysdate,'YYYY')||lpad(SEQ_SPD_FOC_PO.NEXTVAL,6,0);
+--dbms_output.put_line(v_po_no);
+
+FOR j IN( SELECT DISTINCT PART_NO,CREATED_BY, part_desc,d.damaged_qty FROM csnet_spd_so_receive_detail d
+WHERE damaged_qty IS NOT NULL AND gerp_order_no=i.gerp_order_no)LOOP
+v_cnt:=0;
+v_file:=null;
+
+SELECT count(1)into v_cnt from csnet_spd_file_upload_dtl d
+where d.gerp_order_no=i.gerp_order_no
+AND d.part_no=j.part_no;
+
+IF v_cnt>0 THEN
+FOR k in (select distinct t.dlr_file_name from csnet_spd_file_upload_dtl t
+where t.gerp_order_no=i.gerp_order_no
+AND t.part_no=j.part_no)LOOP
+
+v_file:=v_file||k.dlr_file_name||',';
+
+
+END LOOP;
+v_file:=SUBSTR(v_file,1,length(v_file)-1);
+
+
+END IF;
+INSERT INTO csnet_spd_po_detail
+(
+part_no,
+part_desc,
+dealer_price,
+incentive,
+req_qty,
+order_amt,
+po_number,
+status,
+creation_date,
+created_by,
+last_update_date,
+last_updated_by,
+po_type,
+foc_ref_so,
+id,
+foc_file
+)
+VALUES
+(
+j.part_no,
+j.part_desc,
+0,
+0,
+j.damaged_qty,
+0,
+v_po_no,
+'PO_REQUESTED',
+sysdate,
+i.created_by,
+sysdate,
+'SYSTEM',
+'FOC',
+i.gerp_order_no,
+hibernate_sequence.nextval,
+v_file
+);
+
+UPDATE csnet_spd_so_receive_detail d
+SET d.foc_flag='Y'
+WHERE d.gerp_order_no=i.gerp_order_no
+AND d.part_no=j.part_no
+AND d.damaged_qty=j.damaged_qty
+AND d.foc_flag IS NULL;
+
+
+
+END LOOP;
+COMMIT;
+
+END LOOP;
+COMMIT;
+
+EXCEPTION
+  WHEN OTHERS THEN
+    V_ERRMSG := SUBSTR(SQLERRM, 1, 250);
+    -----dbms_output.put_line('Error2');
+    INSERT INTO ERR_DATA_TRANSFER 
+      (PROC, ERR_MSG, ERR_DATE, STATUS)
+    VALUES
+      ('proc_spd_create_foc_po', V_ERRMSG, SYSDATE, 1);
+    COMMIT;
+
+
+
+END CSNET_SPD_CREATE_FOC_PO_PROC;
+
+-------------------------------------------------------------end-----------------------------------------------------------
+
+-------------------------------------------------------------Start----------------------------------------------------------
+
+/* CSNET_SPD_Part_Update_PROC */
+
+create or replace PROCEDURE CSNET_SPD_Part_Update_PROC(
+                              
+                               P_Part_No  IN VARCHAR2,
+                               P_Part_Type IN  VARCHAR2,
+                               P_Approval_Flag in VARCHAR2 ,
+                              P_Updated_By in VARCHAR2 ,
+                               P_Remarks  IN VARCHAR2,
+                               C_Result  OUT SYS_REFCURSOR
+                               ) AS
+
+                           
+    /**********************************************************************************************************/
+    /*
+    /* PROJECT      : SPD 
+    /* MODULE       : Part_Update
+    /* PROGRAM NAME : CSNET_SPD_Part_Update_PROC
+    /* DESCRIPTION  : 
+    /* REFERENCE BY :
+    /* PROGRAM HISTORY
+    /*------------------------------------------------------------------------------
+    /*   DATE            IN CHARGE                 DESCRIPTION
+        01/03/2025      KAPIL KUMAR                 Part_Update
+
+  /*************************************************************************************************************/  
+
+
+  BEGIN
+  
+  BEGIN
+    UPDATE CSN_SPD_PART_MRP_MST 
+    SET APPROVAL_FLAG=P_Approval_Flag ,  
+    REMARKS=P_Remarks,
+    APPROVAL_DATE = sysdate, 
+    APPROVED_BY =P_Updated_By ,
+    LAST_UPDATE_DATE=sysdate,
+    LAST_UPDATED_BY=P_Updated_By
+    WHERE Part_No=P_Part_No and   PART_TYPE=P_Part_Type;
+
+        Commit;
+        
+        EXCEPTION
+  WHEN OTHERS THEN
+    rollback;
+    v_errmsg := SUBSTR(SQLERRM, 1, 250);
+    INSERT INTO ERR_DATA_TRANSFER
+      (PROC, ERR_MSG, ERR_DATE, STATUS)
+    VALUES
+      ('CSNET_SPD_Part_Update_PROC', V_ERRMSG, SYSDATE, 1);
+    COMMIT;
+
+end;
+
+  OPEN C_Result FOR
+    select * from CSN_SPD_PART_MRP_MST WHere Part_No =P_Part_No and   PART_TYPE=P_Part_Type;
+
+  END CSNET_SPD_Part_Update_PROC;
+
+-------------------------------------------------------------end-----------------------------------------------------------
+
+-------------------------------------------------------------Start----------------------------------------------------------
+
+/* CSNET_SPD_GET_MENU_LIST_PROC */
+
+create or replace PROCEDURE CSNET_SPD_GET_MENU_LIST_PROC (
+    P_Login_Id IN VARCHAR2,
+    P_Role IN VARCHAR2,
+    C_result OUT SYS_REFCURSOR
+)
+AS
+                          
+    /**********************************************************************************************************/
+    /*
+    /* PROJECT      : SPD 
+    /* MODULE       : GET_MENU_LIST
+    /* PROGRAM NAME : CSNET_SPD_GET_MENU_LIST_PROC
+    /* DESCRIPTION  : 
+    /* REFERENCE BY :
+    /* PROGRAM HISTORY
+    /*------------------------------------------------------------------------------
+    /*   DATE            IN CHARGE                 DESCRIPTION
+        01/03/2025      KAPIL KUMAR                 GET_MENU_LIST
+
+  /*************************************************************************************************************/  
+
+    v_exists NUMBER;  -- Variable to store result of EXISTS check
+    v_internal_role varchar2(100);
+BEGIN
+    -- Check if the Login_Id exists in CSNET_SPD_USER_Role_Mapping_Tbl
+    BEGIN
+        SELECT COUNT(1) 
+        INTO v_exists
+        FROM CSNET_SPD_USER_Role_Mapping_Tbl 
+        WHERE Login_Id = P_Login_Id;
+    EXCEPTION
+        WHEN NO_DATA_FOUND THEN
+            v_exists := 0;  -- If no data is found, set v_exists to 0
+        WHEN OTHERS THEN
+            v_exists := 0;  -- If any other error occurs, set v_exists to 0
+    END;
+
+    IF v_exists > 0 THEN
+    
+     SELECT Role 
+        INTO v_internal_role
+        FROM CSNET_SPD_USER_Role_Mapping_Tbl 
+        WHERE Login_Id = P_Login_Id;
+        -- Case when the Login_Id exists: Show menus based on role and specific menu codes
+        OPEN C_result FOR
+    Select * from (   
+          SELECT m.code,
+                   m.name,
+                   m.state,
+                   m.type,
+                   m.icon,
+                   m.ATTRIBUTE6 Seq,
+                   m.parent_menu
+            FROM CSNET_SPD_MENU_MASTER_TBL m
+            JOIN CSNET_SPD_MENU_ROLE_MAP_TBL b ON m.code = b.menu_code
+            WHERE LOWER(b.role) = LOWER(P_Role) AND m.code IN ('Master', 'HSN_Master', 'Part_Grade_Master', 'Part_Master', 'Part_Approval')  AND v_internal_role<>'fd_portal'
+
+            UNION
+    
+            -- Additional logic to retrieve menus if Login_Id exists in role mapping (with UNION) --this is for part approval
+            SELECT m.code,
+                   m.name,
+                   m.state,
+                   m.type,
+                   m.icon,
+                   m.ATTRIBUTE6 Seq,
+                   m.parent_menu
+            FROM CSNET_SPD_MENU_MASTER_TBL m
+            JOIN CSNET_SPD_MENU_ROLE_MAP_TBL b ON m.code = b.menu_code
+            JOIN CSNET_SPD_USER_Role_Mapping_Tbl ur ON ur.Role = b.Role
+            WHERE ur.Login_Id = P_Login_Id  AND  ur.Role='part_apl'  AND m.code IN ('Master', 'HSN_Master', 'Part_Grade_Master', 'Part_Master', 'Part_Approval') AND  v_internal_role<>'fd_portal'        
+            
+            UNION
+             -- Additional logic to retrieve menus if Login_Id exists in role mapping (with UNION) --this is for Warehouse
+            SELECT m.code,
+                   m.name,
+                   m.state,
+                   m.type,
+                   m.icon,
+                   m.ATTRIBUTE6 Seq,
+                   m.parent_menu
+            FROM CSNET_SPD_MENU_MASTER_TBL m
+            JOIN CSNET_SPD_MENU_ROLE_MAP_TBL b ON m.code = b.menu_code
+            JOIN CSNET_SPD_USER_Role_Mapping_Tbl ur ON ur.Role = b.Role
+            WHERE ur.Login_Id = P_Login_Id AND ur.Role='fd_portal' AND  v_internal_role='fd_portal'
+            AND  m.code IN ('View_SO','Requested_Inventory_Warehouse')
+            ) order by Seq;
+
+        
+
+    ELSE
+        -- Case when the Login_Id doesn't exist: Show menus based on role only
+        OPEN C_result FOR
+            SELECT m.code,
+                   m.ATTRIBUTE6 Seq,
+                   m.name,
+                   m.state,
+                   m.type,
+                   m.icon,
+                   m.parent_menu
+            FROM CSNET_SPD_MENU_MASTER_TBL m
+            JOIN CSNET_SPD_MENU_ROLE_MAP_TBL b ON m.code = b.menu_code
+            WHERE LOWER(b.role) = LOWER(P_Role) order by  m.ATTRIBUTE6 ASC;
+
+    END IF;
+END CSNET_SPD_GET_MENU_LIST_PROC;
+
+-------------------------------------------------------------end-----------------------------------------------------------

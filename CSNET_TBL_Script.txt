@@ -1,19 +1,36 @@
-CREATE TABLE "CSNET_PLUS"."CSNET_SPD_USER_ROLE_MAP_TBL" 
-   (  "LOGIN_ID" VARCHAR2(100 BYTE), 
-  "ROLE" VARCHAR2(100 BYTE), 
-  "CREATED_DATE" DATE, 
-  "UPDATED_BY" VARCHAR2(100 BYTE), 
-  "UPDATED_ON" DATE, 
-  "ATTRIBUTE1" VARCHAR2(250 BYTE), 
-  "ATTRIBUTE2" VARCHAR2(250 BYTE), 
-  "ATTRIBUTE3" VARCHAR2(250 BYTE), 
-  "ATTRIBUTE4" VARCHAR2(250 BYTE), 
-  "ATTRIBUTE5" VARCHAR2(250 BYTE), 
-  "ATTRIBUTE6" NUMBER, 
-  "ATTRIBUTE7" NUMBER, 
-  "ATTRIBUTE8" NUMBER, 
-  "ATTRIBUTE9" DATE, 
-  "ATTRIBUTE10" DATE
+
+
+  CREATE TABLE "CSNET_PLUS"."CSNET_SPD_PART_INVENT_HIS_TBL" 
+   (	"MONTH" VARCHAR2(6 BYTE), 
+	"INV_ORG" VARCHAR2(10 BYTE), 
+	"BRANCH" VARCHAR2(10 BYTE), 
+	"WH_TYPE" VARCHAR2(10 BYTE), 
+	"ZONE" VARCHAR2(20 BYTE), 
+	"PART_NO" VARCHAR2(50 BYTE), 
+	"ITEM_DESC" VARCHAR2(100 BYTE), 
+	"MODEL" VARCHAR2(50 BYTE), 
+	"PRODUCT3_CODE" VARCHAR2(10 BYTE), 
+	"DIVISION" VARCHAR2(20 BYTE), 
+	"SUB_INV_GRADE" VARCHAR2(10 BYTE), 
+	"SUB_INV_CODE" VARCHAR2(30 BYTE), 
+	"ONHAND_QTY" NUMBER, 
+	"ONHAND_AMOUNT" NUMBER, 
+	"CREATION_DATE" DATE, 
+	"CREATED_BY" VARCHAR2(50 BYTE), 
+	"LAST_UPDATE_DATE" DATE, 
+	"LAST_UPDATED_BY" VARCHAR2(50 BYTE), 
+	"ID" NUMBER, 
+	"WH_NAME" VARCHAR2(100 BYTE), 
+	"ATTRIBUTE1" VARCHAR2(250 BYTE), 
+	"ATTRIBUTE2" VARCHAR2(250 BYTE), 
+	"ATTRIBUTE3" VARCHAR2(250 BYTE), 
+	"ATTRIBUTE4" VARCHAR2(250 BYTE), 
+	"ATTRIBUTE5" VARCHAR2(250 BYTE), 
+	"ATTRIBUTE6" NUMBER, 
+	"ATTRIBUTE7" NUMBER, 
+	"ATTRIBUTE8" NUMBER, 
+	"ATTRIBUTE9" DATE, 
+	"ATTRIBUTE10" DATE
    ) SEGMENT CREATION IMMEDIATE 
   PCTFREE 10 PCTUSED 40 INITRANS 1 MAXTRANS 255 
  NOCOMPRESS LOGGING
@@ -21,17 +38,177 @@ CREATE TABLE "CSNET_PLUS"."CSNET_SPD_USER_ROLE_MAP_TBL"
   PCTINCREASE 0 FREELISTS 1 FREELIST GROUPS 1
   BUFFER_POOL DEFAULT FLASH_CACHE DEFAULT CELL_FLASH_CACHE DEFAULT)
   TABLESPACE "CSN" ;
-  
-  Create Index INDX_USER_ROLE_MAPPING ON CSNET_SPD_USER_ROLE_MAP_TBL(LOGIN_ID,ROLE);
-  
+Create Index INDX_INVENTORY_HIS ON CSNET_SPD_PART_INVENT_HIS_TBL(ID);
 
-  
-  
-  
-  ----------------------------
-  
 
-CREATE OR REPLACE EDITIONABLE TRIGGER "CSNET_PLUS"."TRG_DELETE_ON_INV_PRT_MST" 
+  CREATE TABLE "CSNET_PLUS"."CSNET_SPD_BRANCH_WH_MAP_TBL" 
+   (	"BRANCH" VARCHAR2(10 BYTE), 
+	"WH_NAME" VARCHAR2(10 BYTE), 
+	"ATTRIBUTE1" VARCHAR2(250 BYTE), 
+	"ATTRIBUTE2" VARCHAR2(250 BYTE), 
+	"ATTRIBUTE3" VARCHAR2(250 BYTE), 
+	"ATTRIBUTE4" VARCHAR2(250 BYTE), 
+	"ATTRIBUTE5" VARCHAR2(250 BYTE), 
+	"ATTRIBUTE6" NUMBER, 
+	"ATTRIBUTE7" NUMBER, 
+	"ATTRIBUTE8" NUMBER, 
+	"ATTRIBUTE9" DATE, 
+	"ATTRIBUTE10" DATE
+   ) SEGMENT CREATION IMMEDIATE 
+  PCTFREE 10 PCTUSED 40 INITRANS 1 MAXTRANS 255 
+ NOCOMPRESS LOGGING
+  STORAGE(INITIAL 65536 NEXT 1048576 MINEXTENTS 1 MAXEXTENTS 2147483645
+  PCTINCREASE 0 FREELISTS 1 FREELIST GROUPS 1
+  BUFFER_POOL DEFAULT FLASH_CACHE DEFAULT CELL_FLASH_CACHE DEFAULT)
+  TABLESPACE "CSN" ;
+Create Index INDX_BRANCH_WH_MAPPING ON CSNET_SPD_BRANCH_WH_MAP_TBL(BRANCH,WH_NAME);
+
+
+  CREATE TABLE "CSNET_PLUS"."CSNET_SPD_MENU_MASTER_TBL" 
+   (	"CODE" VARCHAR2(100 BYTE), 
+	"NAME" VARCHAR2(100 BYTE), 
+	"STATE" VARCHAR2(100 BYTE), 
+	"TYPE" VARCHAR2(100 BYTE), 
+	"ICON" VARCHAR2(100 BYTE), 
+	"PARENT_MENU" VARCHAR2(100 BYTE), 
+	"CREATED_BY" VARCHAR2(100 BYTE), 
+	"CREATED_DATE" DATE, 
+	"UPDATED_BY" VARCHAR2(100 BYTE), 
+	"UPDATED_ON" DATE, 
+	"ATTRIBUTE1" VARCHAR2(250 BYTE), 
+	"ATTRIBUTE2" VARCHAR2(250 BYTE), 
+	"ATTRIBUTE3" VARCHAR2(250 BYTE), 
+	"ATTRIBUTE4" VARCHAR2(250 BYTE), 
+	"ATTRIBUTE5" VARCHAR2(250 BYTE), 
+	"ATTRIBUTE6" NUMBER, 
+	"ATTRIBUTE7" NUMBER, 
+	"ATTRIBUTE8" NUMBER, 
+	"ATTRIBUTE9" DATE, 
+	"ATTRIBUTE10" DATE, 
+	 CONSTRAINT "PK_TBL_MENU_MASTER_CODE" PRIMARY KEY ("CODE")
+  USING INDEX PCTFREE 10 INITRANS 2 MAXTRANS 255 COMPUTE STATISTICS 
+  STORAGE(INITIAL 65536 NEXT 1048576 MINEXTENTS 1 MAXEXTENTS 2147483645
+  PCTINCREASE 0 FREELISTS 1 FREELIST GROUPS 1
+  BUFFER_POOL DEFAULT FLASH_CACHE DEFAULT CELL_FLASH_CACHE DEFAULT)
+  TABLESPACE "CSN"  ENABLE
+   ) SEGMENT CREATION IMMEDIATE 
+  PCTFREE 10 PCTUSED 40 INITRANS 1 MAXTRANS 255 
+ NOCOMPRESS LOGGING
+  STORAGE(INITIAL 65536 NEXT 1048576 MINEXTENTS 1 MAXEXTENTS 2147483645
+  PCTINCREASE 0 FREELISTS 1 FREELIST GROUPS 1
+  BUFFER_POOL DEFAULT FLASH_CACHE DEFAULT CELL_FLASH_CACHE DEFAULT)
+  TABLESPACE "CSN" ;
+
+
+
+  CREATE TABLE "CSNET_PLUS"."CSNET_SPD_MENU_ROLE_MAP_TBL" 
+   (	"MENU_CODE" VARCHAR2(100 BYTE), 
+	"ROLE" VARCHAR2(100 BYTE), 
+	"CREATED_BY" VARCHAR2(100 BYTE), 
+	"CREATED_DATE" DATE, 
+	"UPDATED_BY" VARCHAR2(100 BYTE), 
+	"UPDATED_ON" DATE, 
+	"ATTRIBUTE1" VARCHAR2(250 BYTE), 
+	"ATTRIBUTE2" VARCHAR2(250 BYTE), 
+	"ATTRIBUTE3" VARCHAR2(250 BYTE), 
+	"ATTRIBUTE4" VARCHAR2(250 BYTE), 
+	"ATTRIBUTE5" VARCHAR2(250 BYTE), 
+	"ATTRIBUTE6" NUMBER, 
+	"ATTRIBUTE7" NUMBER, 
+	"ATTRIBUTE8" NUMBER, 
+	"ATTRIBUTE9" DATE, 
+	"ATTRIBUTE10" DATE
+   ) SEGMENT CREATION IMMEDIATE 
+  PCTFREE 10 PCTUSED 40 INITRANS 1 MAXTRANS 255 
+ NOCOMPRESS LOGGING
+  STORAGE(INITIAL 65536 NEXT 1048576 MINEXTENTS 1 MAXEXTENTS 2147483645
+  PCTINCREASE 0 FREELISTS 1 FREELIST GROUPS 1
+  BUFFER_POOL DEFAULT FLASH_CACHE DEFAULT CELL_FLASH_CACHE DEFAULT)
+  TABLESPACE "CSN" ;
+
+Create Index INDX_MENU_ROLE_MAPPING ON CSNET_SPD_MENU_ROLE_MAP_TBL(MENU_CODE,ROLE);
+
+
+
+
+  CREATE TABLE "CSNET_PLUS"."CSNET_SPD_USER_ROLE_MAPPING_TBL" 
+   (	"LOGIN_ID" VARCHAR2(100 BYTE), 
+	"ROLE" VARCHAR2(100 BYTE), 
+	"CREATED_DATE" DATE, 
+	"UPDATED_BY" VARCHAR2(100 BYTE), 
+	"UPDATED_ON" DATE, 
+	"ATTRIBUTE1" VARCHAR2(250 BYTE), 
+	"ATTRIBUTE2" VARCHAR2(250 BYTE), 
+	"ATTRIBUTE3" VARCHAR2(250 BYTE), 
+	"ATTRIBUTE4" VARCHAR2(250 BYTE), 
+	"ATTRIBUTE5" VARCHAR2(250 BYTE), 
+	"ATTRIBUTE6" NUMBER, 
+	"ATTRIBUTE7" NUMBER, 
+	"ATTRIBUTE8" NUMBER, 
+	"ATTRIBUTE9" DATE, 
+	"ATTRIBUTE10" DATE
+   ) SEGMENT CREATION IMMEDIATE 
+  PCTFREE 10 PCTUSED 40 INITRANS 1 MAXTRANS 255 
+ NOCOMPRESS LOGGING
+  STORAGE(INITIAL 65536 NEXT 1048576 MINEXTENTS 1 MAXEXTENTS 2147483645
+  PCTINCREASE 0 FREELISTS 1 FREELIST GROUPS 1
+  BUFFER_POOL DEFAULT FLASH_CACHE DEFAULT CELL_FLASH_CACHE DEFAULT)
+  TABLESPACE "CSN" ;
+Create Index INDX_USER_ROLE_MAPPING ON CSNET_SPD_USER_ROLE_MAPPING_TBL(LOGIN_ID,ROLE);
+
+
+  CREATE TABLE "CSNET_PLUS"."CSNET_SPD_PART_INVENT_MST_TBL" 
+   (	"MONTH" VARCHAR2(6 BYTE), 
+	"INV_ORG" VARCHAR2(10 BYTE), 
+	"BRANCH" VARCHAR2(10 BYTE), 
+	"WH_TYPE" VARCHAR2(10 BYTE), 
+	"ZONE" VARCHAR2(20 BYTE), 
+	"PART_NO" VARCHAR2(50 BYTE), 
+	"ITEM_DESC" VARCHAR2(100 BYTE), 
+	"MODEL" VARCHAR2(50 BYTE), 
+	"PRODUCT3_CODE" VARCHAR2(10 BYTE), 
+	"DIVISION" VARCHAR2(20 BYTE), 
+	"SUB_INV_GRADE" VARCHAR2(10 BYTE), 
+	"SUB_INV_CODE" VARCHAR2(30 BYTE), 
+	"ONHAND_QTY" NUMBER, 
+	"ONHAND_AMOUNT" NUMBER, 
+	"CREATION_DATE" DATE, 
+	"CREATED_BY" VARCHAR2(50 BYTE), 
+	"LAST_UPDATE_DATE" DATE, 
+	"LAST_UPDATED_BY" VARCHAR2(50 BYTE), 
+	"ID" NUMBER, 
+	"WH_NAME" VARCHAR2(100 BYTE), 
+	"ATTRIBUTE1" VARCHAR2(250 BYTE), 
+	"ATTRIBUTE2" VARCHAR2(250 BYTE), 
+	"ATTRIBUTE3" VARCHAR2(250 BYTE), 
+	"ATTRIBUTE4" VARCHAR2(250 BYTE), 
+	"ATTRIBUTE5" VARCHAR2(250 BYTE), 
+	"ATTRIBUTE6" NUMBER, 
+	"ATTRIBUTE7" NUMBER, 
+	"ATTRIBUTE8" NUMBER, 
+	"ATTRIBUTE9" DATE, 
+	"ATTRIBUTE10" DATE, 
+	 CONSTRAINT "UNIQUE_" UNIQUE ("PART_NO", "WH_NAME")
+  USING INDEX PCTFREE 10 INITRANS 2 MAXTRANS 255 COMPUTE STATISTICS 
+  STORAGE(INITIAL 65536 NEXT 1048576 MINEXTENTS 1 MAXEXTENTS 2147483645
+  PCTINCREASE 0 FREELISTS 1 FREELIST GROUPS 1
+  BUFFER_POOL DEFAULT FLASH_CACHE DEFAULT CELL_FLASH_CACHE DEFAULT)
+  TABLESPACE "CSN"  ENABLE, 
+	 PRIMARY KEY ("ID")
+  USING INDEX PCTFREE 10 INITRANS 2 MAXTRANS 255 COMPUTE STATISTICS 
+  STORAGE(INITIAL 65536 NEXT 1048576 MINEXTENTS 1 MAXEXTENTS 2147483645
+  PCTINCREASE 0 FREELISTS 1 FREELIST GROUPS 1
+  BUFFER_POOL DEFAULT FLASH_CACHE DEFAULT CELL_FLASH_CACHE DEFAULT)
+  TABLESPACE "CSN"  ENABLE
+   ) SEGMENT CREATION IMMEDIATE 
+  PCTFREE 10 PCTUSED 40 INITRANS 1 MAXTRANS 255 
+ NOCOMPRESS LOGGING
+  STORAGE(INITIAL 65536 NEXT 1048576 MINEXTENTS 1 MAXEXTENTS 2147483645
+  PCTINCREASE 0 FREELISTS 1 FREELIST GROUPS 1
+  BUFFER_POOL DEFAULT FLASH_CACHE DEFAULT CELL_FLASH_CACHE DEFAULT)
+  TABLESPACE "CSN" ;
+
+  CREATE OR REPLACE EDITIONABLE TRIGGER "CSNET_PLUS"."TRG_DELETE_ON_INV_PRT_MST" 
 /**********************************************************************************************************/
   /*
      PROJECT      : SPD
@@ -74,287 +251,102 @@ begin
 SYSDATE,
 'TRIGGER',
 :old.Id,
-:old.WH_NAME,
-:old.ATTRIBUTE1	,
-:old.ATTRIBUTE2	,
-:old.ATTRIBUTE3	,
-:old.ATTRIBUTE4,
-:old.ATTRIBUTE5	,
-:old.ATTRIBUTE6	,
-:old.ATTRIBUTE7	,
-:old.ATTRIBUTE8	,
-:old.ATTRIBUTE9	,
-:old.ATTRIBUTE10
-
+:old.WH_NAME
 
   );
-  
-  
 end TRG_DELETE_ON_INV_PRT_MST;
 
+/
+ALTER TRIGGER "CSNET_PLUS"."TRG_DELETE_ON_INV_PRT_MST" ENABLE;
 
 
 
-/* csnet_SPD_sso_user_validate_proc */
-
-create or replace PROCEDURE csnet_SPD_sso_user_validate_proc (
-    p_username   VARCHAR2,
-    p_auth_token VARCHAR2,
-    p_out        OUT SYS_REFCURSOR
-) IS
+------------------------------------------------
 
 
-                            
-    /**********************************************************************************************************/
-    /*
-    /* PROJECT      : SPD 
-    /* MODULE       : SPD
-    /* PROGRAM NAME : CSNET_SPD_SSO_USER_VALIDATE_PROC
-    /* DESCRIPTION  : 
-    /* REFERENCE BY :
-    /* PROGRAM HISTORY
-    /*------------------------------------------------------------------------------
-    /*   DATE            IN CHARGE                 DESCRIPTION
-        01/03/2025      KAPIL KUMAR                 SPD
-
-  /*************************************************************************************************************/  
-
-
-
-
-    v_proc       VARCHAR2(250) := 'CSNET_SSO_USER_VALIDATE_PROC';
-    v_errmsg     VARCHAR2(300);
-    v_status     VARCHAR2(250);
-    v_user_name  VARCHAR2(250);
-    v_id         NUMBER;
-    v_role_id    VARCHAR2(250);
-    v_auth_token NUMBER;
-BEGIN
-  
- 
-    -- User details check
-    BEGIN
-        SELECT
-            u.id,
-            u.role,
-            u.login_id
-        INTO
-            v_id,
-            v_role_id,
-            v_user_name
-        FROM
-            csnetplus.csnet_user_master_v u, -- csnet_plus.csnet_user_master_v u,
-            csnet_user_auth_tb             ua
-        WHERE
-                1 = 1
-            AND u.id = ua.user_id
-         --and u.LOGIN_ID = p_encrypt.decrypt_ssn(P_USERNAME) -- DB_ency
-            AND ua.attribute1 = p_username -- Java_ency
-            AND ua.application_name = 'SPD Management'
-            AND ua.auth_token = p_auth_token
-            AND u.active_status = '1';
-    
---      SELECT U.ID, 1 AS USER_ROLE_ID, 0 AS AUTH_TOKEN
---        INTO V_ID, V_ROLE_ID, V_AUTH_TOKEN
---        FROM CSNET_PLUS.DNET_USER_MST U
---       WHERE 1 = 1
---         AND U.LOGIN_ID = P_ENCRYPT.DECRYPT_SSN(P_USERNAME)
---         AND U.ACTIVE_STATUS = 'A' AND  User_Type='INTERNAL'; 
-
-
-    EXCEPTION
-        WHEN OTHERS THEN
-            v_id := '0';
-            v_role_id := '0';
-            v_status := '1';
-            v_errmsg := sqlerrm
-                        || '=>'
-                        || ' USER DETAIL FETCH ISSUES FOR ';
-                       -- || p_encrypt.decrypt_ssn(p_username);
-
-            INSERT INTO err_data_transfer (
-                proc,
-                err_msg,
-                err_date,
-                status
-            ) VALUES (
-                v_proc,
-                v_errmsg,
-                sysdate,
-                v_status
-            );
-
-            COMMIT;
-    END;
-
-    --dbms_output.put_line('errrr' || v_id);
-    IF ( v_id > 0 ) THEN
-        OPEN p_out FOR
-
-         SELECT
-                                          u.id,
-                                          u.login_id,
-                                          NVL((Select Role From CSNET_SPD_USER_ROLE_MAP_TBL uap where uap.Login_Id=u.login_id),'CS_CORP') AS INTERNAL_ROLE,
-                                          u.first_name
-                                          || ' '
-                                          || u.last_name login_name,
-                                          ''             AS zone,
-                                          ''             AS region,
-                                          u.branch       AS branch_id,
-                                          (
-                                              SELECT
-                                                  company_name
-                                              FROM
-                                                  roi.company_master
-                                              WHERE
-                                                  to_char(company_cd) = u.branch
-                                          )              branch,
-                                          u.ctrl_au,
-                                          u.pricing_group_code,
-                                          u.category_name,
-                                          u.login_email_id,
-                                          u.contact_no1,
-                                          u.contact_no2,
-                                          u.role         role_id,
-                                          (
-                                              SELECT
-                                                  value
-                                              FROM
-                                                  csnet_plus.csnet_code_master
-                                              WHERE
-                                                      to_char(lookup_code) = u.role
-                                                  AND parent_lookup_type = 'UGP'
-                                                  AND lookup_type = 'ROL'
-                                                  AND parent_lookup_code = u.user_group
-                                          )              user_role_name,
-                                          u.active_status
-                                      FROM
-                                          csnetplus.csnet_user_master_v u
-                       WHERE
-                               1 = 1
-                           AND u.id = v_id;
-
-    ELSE
-        OPEN p_out FOR SELECT
-                           'NO RECORD FOUND' msg
-                       FROM
-                           dual;
-
-    END IF;
-
-END csnet_SPD_sso_user_validate_proc;
-
-/* CSNET_SPD_GET_MENU_LIST_PROC */
-create or replace PROCEDURE CSNET_SPD_GET_MENU_LIST_PROC (
-    P_Login_Id IN VARCHAR2,
-    P_Role IN VARCHAR2,
-    C_result OUT SYS_REFCURSOR
-)
-AS
-                          
-    /**********************************************************************************************************/
-    /*
-    /* PROJECT      : SPD 
-    /* MODULE       : GET_MENU_LIST
-    /* PROGRAM NAME : CSNET_SPD_GET_MENU_LIST_PROC
-    /* DESCRIPTION  : 
-    /* REFERENCE BY :
-    /* PROGRAM HISTORY
-    /*------------------------------------------------------------------------------
-    /*   DATE            IN CHARGE                 DESCRIPTION
-        01/03/2025      KAPIL KUMAR                 GET_MENU_LIST
-
-  /*************************************************************************************************************/  
-
-    v_exists NUMBER;  -- Variable to store result of EXISTS check
-    v_internal_role varchar2(100);
-BEGIN
-    -- Check if the Login_Id exists in CSNET_SPD_USER_ROLE_MAP_TBL
-    BEGIN
-        SELECT COUNT(1) 
-        INTO v_exists
-        FROM CSNET_SPD_USER_ROLE_MAP_TBL 
-        WHERE Login_Id = P_Login_Id;
-    EXCEPTION
-        WHEN NO_DATA_FOUND THEN
-            v_exists := 0;  -- If no data is found, set v_exists to 0
-        WHEN OTHERS THEN
-            v_exists := 0;  -- If any other error occurs, set v_exists to 0
-    END;
-
-    IF v_exists > 0 THEN
-    
-     SELECT Role 
-        INTO v_internal_role
-        FROM CSNET_SPD_USER_ROLE_MAP_TBL 
-        WHERE Login_Id = P_Login_Id;
-        -- Case when the Login_Id exists: Show menus based on role and specific menu codes
-        OPEN C_result FOR
-    Select * from (   
-          SELECT m.code,
-                   m.name,
-                   m.state,
-                   m.type,
-                   m.icon,
-                   m.ATTRIBUTE6 Seq,
-                   m.parent_menu
-            FROM CSNET_SPD_MENU_MASTER_TBL m
-            JOIN CSNET_SPD_MENU_ROLE_MAP_TBL b ON m.code = b.menu_code
-            WHERE LOWER(b.role) = LOWER(P_Role) AND m.code IN ('Master', 'HSN_Master', 'Part_Grade_Master', 'Part_Master', 'Part_Approval')  AND v_internal_role<>'fd_portal'
-
-            UNION
-    
-            -- Additional logic to retrieve menus if Login_Id exists in role mapping (with UNION) --this is for part approval
-            SELECT m.code,
-                   m.name,
-                   m.state,
-                   m.type,
-                   m.icon,
-                   m.ATTRIBUTE6 Seq,
-                   m.parent_menu
-            FROM CSNET_SPD_MENU_MASTER_TBL m
-            JOIN CSNET_SPD_MENU_ROLE_MAP_TBL b ON m.code = b.menu_code
-            JOIN CSNET_SPD_USER_ROLE_MAP_TBL ur ON ur.Role = b.Role
-            WHERE ur.Login_Id = P_Login_Id  AND  ur.Role='part_apl'  AND m.code IN ('Master', 'HSN_Master', 'Part_Grade_Master', 'Part_Master', 'Part_Approval') AND  v_internal_role<>'fd_portal'        
-            
-            UNION
-             -- Additional logic to retrieve menus if Login_Id exists in role mapping (with UNION) --this is for Warehouse
-            SELECT m.code,
-                   m.name,
-                   m.state,
-                   m.type,
-                   m.icon,
-                   m.ATTRIBUTE6 Seq,
-                   m.parent_menu
-            FROM CSNET_SPD_MENU_MASTER_TBL m
-            JOIN CSNET_SPD_MENU_ROLE_MAP_TBL b ON m.code = b.menu_code
-            JOIN CSNET_SPD_USER_ROLE_MAP_TBL ur ON ur.Role = b.Role
-            WHERE ur.Login_Id = P_Login_Id AND ur.Role='fd_portal' AND  v_internal_role='fd_portal'
-            AND  m.code IN ('View_SO','Requested_Inventory_Warehouse')
-            ) order by Seq;
-
-        
-
-    ELSE
-        -- Case when the Login_Id doesn't exist: Show menus based on role only
-        OPEN C_result FOR
-            SELECT m.code,
-                   m.ATTRIBUTE6 Seq,
-                   m.name,
-                   m.state,
-                   m.type,
-                   m.icon,
-                   m.parent_menu
-            FROM CSNET_SPD_MENU_MASTER_TBL m
-            JOIN CSNET_SPD_MENU_ROLE_MAP_TBL b ON m.code = b.menu_code
-            WHERE LOWER(b.role) = LOWER(P_Role) order by  m.ATTRIBUTE6 ASC;
-
-    END IF;
-END CSNET_SPD_GET_MENU_LIST_PROC;
+  CREATE TABLE "CSNET_PLUS"."CSNET_SPD_BULK_INVENTORY_TBL" 
+   (	"MONTH" VARCHAR2(10 BYTE), 
+	"INV_ORG" VARCHAR2(100 BYTE), 
+	"BRANCH" VARCHAR2(100 BYTE), 
+	"WH_TYPE" VARCHAR2(100 BYTE), 
+	"ZONE" VARCHAR2(200 BYTE), 
+	"PART_NO" VARCHAR2(500 BYTE), 
+	"ITEM_DESC" VARCHAR2(1000 BYTE), 
+	"MODEL" VARCHAR2(500 BYTE), 
+	"PRODUCT3_CODE" VARCHAR2(100 BYTE), 
+	"DIVISION" VARCHAR2(200 BYTE), 
+	"SUB_INV_GRADE" VARCHAR2(100 BYTE), 
+	"SUB_INV_CODE" VARCHAR2(300 BYTE), 
+	"ONHAND_QTY" NUMBER(20,0), 
+	"ONHAND_AMOUNT" NUMBER(20,0), 
+	"CREATION_DATE" DATE, 
+	"CREATED_BY" VARCHAR2(50 BYTE), 
+	"LAST_UPDATE_DATE" DATE, 
+	"LAST_UPDATED_BY" VARCHAR2(500 BYTE), 
+	"WH_NAME" VARCHAR2(1000 BYTE), 
+	"ATTRIBUTE1" VARCHAR2(250 BYTE), 
+	"ATTRIBUTE2" VARCHAR2(250 BYTE), 
+	"ATTRIBUTE3" VARCHAR2(250 BYTE), 
+	"ATTRIBUTE4" VARCHAR2(250 BYTE), 
+	"ATTRIBUTE5" VARCHAR2(250 BYTE), 
+	"ATTRIBUTE6" NUMBER, 
+	"ATTRIBUTE7" NUMBER, 
+	"ATTRIBUTE8" NUMBER, 
+	"ATTRIBUTE9" DATE, 
+	"ATTRIBUTE10" DATE
+   ) SEGMENT CREATION IMMEDIATE 
+  PCTFREE 10 PCTUSED 40 INITRANS 1 MAXTRANS 255 
+ NOCOMPRESS LOGGING
+  STORAGE(INITIAL 65536 NEXT 1048576 MINEXTENTS 1 MAXEXTENTS 2147483645
+  PCTINCREASE 0 FREELISTS 1 FREELIST GROUPS 1
+  BUFFER_POOL DEFAULT FLASH_CACHE DEFAULT CELL_FLASH_CACHE DEFAULT)
+  TABLESPACE "CSN" ;
 
 
 
 
 
-
+  CREATE TABLE "CSNET_PLUS"."CSNET_SPD_MAIL_SCHEDULER_TBL" 
+   (	"ID" NUMBER NOT NULL ENABLE, 
+	"FROMEMAIL" VARCHAR2(200 BYTE), 
+	"TOEMAIL" VARCHAR2(200 BYTE), 
+	"CCEMAIL" NVARCHAR2(2000), 
+	"BCCEMAIL" NVARCHAR2(2000), 
+	"SUBJECT" VARCHAR2(200 BYTE), 
+	"BODY" CLOB, 
+	"ISSENT" NUMBER, 
+	"CREATEDDATE" DATE, 
+	"MAILSENTDATE" DATE, 
+	"TYPE" VARCHAR2(200 BYTE), 
+	"ATTACHMENT" NVARCHAR2(2000), 
+	"PO_NUMBER" VARCHAR2(100 BYTE), 
+	"ATTRIBUTE1" VARCHAR2(200 BYTE), 
+	"ATTRIBUTE2" VARCHAR2(250 BYTE), 
+	"ATTRIBUTE3" VARCHAR2(250 BYTE), 
+	"ATTRIBUTE4" VARCHAR2(250 BYTE), 
+	"ATTRIBUTE5" VARCHAR2(250 BYTE), 
+	"ATTRIBUTE6" NUMBER, 
+	"ATTRIBUTE7" NUMBER, 
+	"ATTRIBUTE8" NUMBER, 
+	"ATTRIBUTE9" DATE, 
+	"ATTRIBUTE10" DATE, 
+	 CONSTRAINT "MAIL_PK" PRIMARY KEY ("ID")
+  USING INDEX PCTFREE 10 INITRANS 2 MAXTRANS 255 COMPUTE STATISTICS 
+  STORAGE(INITIAL 65536 NEXT 1048576 MINEXTENTS 1 MAXEXTENTS 2147483645
+  PCTINCREASE 0 FREELISTS 1 FREELIST GROUPS 1
+  BUFFER_POOL DEFAULT FLASH_CACHE DEFAULT CELL_FLASH_CACHE DEFAULT)
+  TABLESPACE "CSN"  ENABLE
+   ) SEGMENT CREATION IMMEDIATE 
+  PCTFREE 10 PCTUSED 40 INITRANS 1 MAXTRANS 255 
+ NOCOMPRESS LOGGING
+  STORAGE(INITIAL 65536 NEXT 1048576 MINEXTENTS 1 MAXEXTENTS 2147483645
+  PCTINCREASE 0 FREELISTS 1 FREELIST GROUPS 1
+  BUFFER_POOL DEFAULT FLASH_CACHE DEFAULT CELL_FLASH_CACHE DEFAULT)
+  TABLESPACE "CSN" 
+ LOB ("BODY") STORE AS BASICFILE (
+  TABLESPACE "CSN" ENABLE STORAGE IN ROW CHUNK 8192 RETENTION 
+  NOCACHE LOGGING 
+  STORAGE(INITIAL 65536 NEXT 1048576 MINEXTENTS 1 MAXEXTENTS 2147483645
+  PCTINCREASE 0 FREELISTS 1 FREELIST GROUPS 1
+  BUFFER_POOL DEFAULT FLASH_CACHE DEFAULT CELL_FLASH_CACHE DEFAULT)) ;
 
